@@ -1,5 +1,7 @@
 // components/VideoEditor.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Clock, PenLine, X } from 'lucide-react';
+import IconButton from './ui/IconButton';
 
 const CAPTION_PRESETS = [
   'hôm nay mình...',
@@ -31,6 +33,7 @@ function genHourSlots() {
 
 export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
   const [videoUrl, setVideoUrl] = useState('');
+  const [videoError, setVideoError] = useState(false);
   const [timestamp, setTimestamp] = useState(''); // empty = unselected
   const [caption, setCaption] = useState('');
   const [showTsPicker, setShowTsPicker] = useState(false);
@@ -43,22 +46,25 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
     if (videoFile) {
       const url = URL.createObjectURL(videoFile);
       setVideoUrl(url);
+      setVideoError(false);
       setTimestamp('');
       setCaption('');
       setShowTsPicker(false);
       setCustomTs('');
-      
+
       return () => {
         URL.revokeObjectURL(url);
       };
     }
   }, [videoFile]);
 
-  const handleDone = () => {
+  const handleDone = (e) => {
+    e?.stopPropagation?.();
+    e?.preventDefault?.();
     onDone({
       blob: videoFile,
       timestamp: timestamp.trim(),
-      caption: caption.trim()
+      caption: caption.trim(),
     });
   };
 
@@ -74,7 +80,7 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
     >
       {/* ── VIDEO PREVIEW OVERLAY ── */}
       <div style={{ height: '52%', background: '#111', position: 'relative', overflow: 'hidden' }}>
-        {videoUrl ? (
+        {videoUrl && !videoError ? (
           <video
             ref={videoRef}
             src={videoUrl}
@@ -83,8 +89,13 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
             muted
             playsInline
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={() => setVideoUrl('')}
+            onError={() => setVideoError(true)}
           />
+        ) : videoError ? (
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'rgba(255,255,255,0.5)' }}>
+            <span style={{ fontSize: '13px' }}>Không phát được preview</span>
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Vẫn có thể bấm XONG để lưu</span>
+          </div>
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#111' }} />
         )}
@@ -123,14 +134,7 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
 
         {/* Top Header Bar */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '50px 20px 12px 20px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), transparent)' }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer', padding: '8px'
-            }}
-          >
-            ←
-          </button>
+          <IconButton icon={ArrowLeft} label="Quay lại" variant="dark" onClick={onClose} />
           
           <span style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '4px', color: 'rgba(255,255,255,0.7)' }}>
             CHỈNH SỬA
@@ -154,7 +158,8 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
         {/* TIME PICKER SECTION */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: '3px' }}>
-            <span>🕒</span> THỜI GIAN
+            <Clock size={12} strokeWidth={2.25} />
+            THỜI GIAN
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -175,12 +180,7 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
             </div>
 
             {timestamp.length > 0 && (
-              <button
-                onClick={() => { setTimestamp(''); setShowTsPicker(false); }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: '20px' }}
-              >
-                ✕
-              </button>
+              <IconButton icon={X} label="Xóa giờ" size="sm" onClick={() => { setTimestamp(''); setShowTsPicker(false); }} />
             )}
           </div>
 
@@ -257,7 +257,8 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
         {/* CAPTION SECTION */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: '3px' }}>
-            <span>📝</span> CAPTION
+            <PenLine size={12} strokeWidth={2.25} />
+            CAPTION
           </div>
 
           <input
