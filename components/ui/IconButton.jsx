@@ -6,6 +6,7 @@ export default function IconButton({
   size = 'md',
   disabled = false,
   className = '',
+  style,
   ...props
 }) {
   const sizeClass = size === 'sm' ? 'ui-icon-btn--sm' : size === 'lg' ? 'ui-icon-btn--lg' : '';
@@ -16,6 +17,7 @@ export default function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
+      style={style}
       className={`ui-icon-btn ui-icon-btn--${variant} ${sizeClass} ${className}`.trim()}
       {...props}
     >

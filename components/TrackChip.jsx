@@ -1,5 +1,7 @@
 // components/TrackChip.jsx
 import React from 'react';
+import { Music, X } from 'lucide-react';
+import IconButton from './ui/IconButton';
 
 export default function TrackChip({ track, onRemove }) {
   if (!track) return null;
@@ -39,10 +41,10 @@ export default function TrackChip({ track, onRemove }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '14px',
+            color: '#7C3AED',
           }}
         >
-          🎵
+          <Music size={14} strokeWidth={2.25} />
         </div>
       )}
 
@@ -75,24 +77,17 @@ export default function TrackChip({ track, onRemove }) {
       </div>
 
       {onRemove && (
-        <button
+        <IconButton
+          icon={X}
+          label="Xóa nhạc"
+          size="sm"
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
           }}
-          style={{
-            border: 'none',
-            background: 'transparent',
-            color: '#A78BFA',
-            cursor: 'pointer',
-            fontSize: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '2px',
-          }}
-        >
-          ✕
-        </button>
+          className=""
+          style={{ background: 'transparent', color: '#A78BFA', width: 28, height: 28 }}
+        />
       )}
     </div>
   );
