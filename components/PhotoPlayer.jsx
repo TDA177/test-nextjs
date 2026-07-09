@@ -104,22 +104,26 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
   // Audio preview controls in fullscreen mode
   useEffect(() => {
     if (fullscreen && track?.previewUrl) {
-      const audio = new Audio(track.previewUrl);
-      audio.loop = true;
-      audioRef.current = audio;
-      
+      let audio = audioRef.current;
+      if (!audio) {
+        audio = new Audio(track.previewUrl);
+        audio.loop = true;
+        audioRef.current = audio;
+      }
       if (isPlaying) {
         audio.play().catch((err) => console.warn('Audio play error:', err));
+      } else {
+        audio.pause();
       }
     }
 
     return () => {
-      if (audioRef.current) {
+      if (!fullscreen && audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
     };
-  }, [fullscreen, track]);
+  }, [fullscreen, track, isPlaying]);
 
   // Handle play/pause audio sync
   useEffect(() => {
@@ -169,6 +173,20 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
     setIsPlaying(true);
     setProgress(0);
     setFullscreen(true);
+
+    // Sync play on user click to unlock iOS Audio autoplay
+    if (track?.previewUrl) {
+      const audio = new Audio(track.previewUrl);
+      audio.loop = true;
+      audio.play()
+        .then(() => {
+          audioRef.current = audio;
+        })
+        .catch((err) => {
+          console.warn('Sync audio play blocked or failed:', err);
+          audioRef.current = audio; // still hold reference to play in useEffect
+        });
+    }
   };
 
   const closeFullscreen = () => {
@@ -176,6 +194,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
     setIsPlaying(false);
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current = null;
     }
   };
 

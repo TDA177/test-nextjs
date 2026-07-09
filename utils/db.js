@@ -106,16 +106,23 @@ export async function saveMediaBlob(mediaId, blob) {
   const db = await getDB();
   if (!db) return null;
   
+  // Convert File objects to raw Blobs to prevent DataCloneError on iOS Safari
+  let safeBlob = blob;
+  if (blob instanceof File) {
+    safeBlob = new Blob([blob], { type: blob.type });
+  }
+  
   return new Promise((resolve) => {
     const tx = db.transaction('media', 'readwrite');
     const store = tx.objectStore('media');
-    const request = store.put(blob, mediaId);
+    const request = store.put(safeBlob, mediaId);
     
     request.onsuccess = () => {
       resolve(mediaId);
     };
     
-    request.onerror = () => {
+    request.onerror = (e) => {
+      console.error('saveMediaBlob failed:', e);
       resolve(null);
     };
   });

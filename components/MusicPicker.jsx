@@ -1,5 +1,5 @@
 // components/MusicPicker.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const CURATED_TRACKS = [
   {
@@ -85,6 +85,27 @@ const CURATED_TRACKS = [
   }
 ];
 
+async function searchTracksFromITunes(query, limit = 25) {
+  const url =
+    `https://itunes.apple.com/search?` +
+    `term=${encodeURIComponent(query)}` +
+    `&media=music&entity=song&limit=${limit}&country=vn`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`iTunes API status ${res.status}`);
+  const json = await res.json();
+
+  return json.results.map((t) => ({
+    id: String(t.trackId),
+    title: t.trackName,
+    artist: t.artistName,
+    album: t.collectionName,
+    artworkUrl: (t.artworkUrl100 ?? '').replace('100x100bb', '300x300bb'),
+    previewUrl: t.previewUrl ?? null,
+    duration: t.trackTimeMillis ?? 0,
+  }));
+}
+
 function fmtDur(ms) {
   if (!ms) return '';
   const s = Math.floor(ms / 1000);
@@ -92,16 +113,22 @@ function fmtDur(ms) {
 }
 
 export default function MusicPicker({ visible, onClose, onSelect }) {
+  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'lofi'
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState(CURATED_TRACKS);
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [playingId, setPlayingId] = useState(null);
+
+  const debounceRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Stop music & reset when modal is closed or opened
+  // Stop music & reset state on visibility change
   useEffect(() => {
     if (visible) {
       setQuery('');
-      setResults(CURATED_TRACKS);
+      setSearchResults([]);
+      setError(null);
       setPlayingId(null);
     } else {
       stopAudio();
@@ -119,19 +146,30 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
     }
   };
 
-  const handleSearch = (val) => {
-    setQuery(val);
-    if (!val.trim()) {
-      setResults(CURATED_TRACKS);
+  const doSearch = useCallback(async (q) => {
+    if (!q.trim()) {
+      setSearchResults([]);
       return;
     }
-    const q = val.toLowerCase();
-    const filtered = CURATED_TRACKS.filter(t => 
-      t.title.toLowerCase().includes(q) ||
-      t.artist.toLowerCase().includes(q) ||
-      t.album.toLowerCase().includes(q)
-    );
-    setResults(filtered);
+    setLoading(true);
+    setError(null);
+    try {
+      const tracks = await searchTracksFromITunes(q);
+      setSearchResults(tracks);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi kết nối thư viện nhạc iTunes.');
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleQueryChange = (e) => {
+    const val = e.target.value;
+    setQuery(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(val), 500);
   };
 
   const handlePlayToggle = (track) => {
@@ -168,6 +206,14 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
 
   if (!visible) return null;
 
+  // Filter curated tracks if on lofi tab and query has text
+  const lofiList = !query.trim() 
+    ? CURATED_TRACKS 
+    : CURATED_TRACKS.filter(t => 
+        t.title.toLowerCase().includes(query.toLowerCase()) ||
+        t.artist.toLowerCase().includes(query.toLowerCase())
+      );
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div 
@@ -177,13 +223,9 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
       >
         <div className="modal-handle" />
 
-        {/* Modal Header */}
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>🎵</span>
-            <span style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b' }}>Chọn nhạc nền</span>
-            <span style={{ fontSize: '11px', color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: '999px', fontWeight: 'bold' }}>Lofi Chill</span>
-          </div>
+          <span style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b' }}>Chọn nhạc nền</span>
           <button 
             onClick={onClose}
             style={{
@@ -196,24 +238,40 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
           </button>
         </div>
 
-        {/* Guide / Legend */}
-        <div style={{ display: 'flex', gap: '14px', background: '#EDE9FE', borderRadius: '12px', padding: '10px 14px', margin: '12px 20px 8px 20px', fontSize: '12px', color: '#5B21B6', fontWeight: '600' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>▶</span> Nghe thử
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>➕</span> Chọn bài hát
-          </div>
+        {/* Custom Tab Selector */}
+        <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '12px', margin: '12px 20px 8px 20px' }}>
+          <button
+            onClick={() => { setActiveTab('search'); stopAudio(); setQuery(''); }}
+            style={{
+              flex: 1, padding: '8px 0', border: 'none', borderRadius: '8px',
+              backgroundColor: activeTab === 'search' ? 'white' : 'transparent',
+              color: activeTab === 'search' ? '#7c3aed' : '#64748b',
+              fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            🔍 Thư viện iTunes (Full)
+          </button>
+          <button
+            onClick={() => { setActiveTab('lofi'); stopAudio(); setQuery(''); }}
+            style={{
+              flex: 1, padding: '8px 0', border: 'none', borderRadius: '8px',
+              backgroundColor: activeTab === 'lofi' ? 'white' : 'transparent',
+              color: activeTab === 'lofi' ? '#7c3aed' : '#64748b',
+              fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            ☕ Nhạc Lofi Chill
+          </button>
         </div>
 
-        {/* Search input */}
+        {/* Input search */}
         <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '14px', padding: '10px 14px', margin: '8px 20px 12px 20px' }}>
           <span style={{ marginRight: '8px', color: '#94a3b8' }}>🔍</span>
           <input
             type="text"
-            placeholder="Tìm bài hát, nghệ sĩ..."
+            placeholder={activeTab === 'search' ? "Tìm triệu bài hát trên iTunes..." : "Lọc nhạc Lofi gợi ý..."}
             value={query}
-            onChange={(e) => handleSearch(e.target.value)}
+            onChange={activeTab === 'search' ? handleQueryChange : (e) => setQuery(e.target.value)}
             style={{
               flex: '1', border: 'none', background: 'transparent', outline: 'none',
               fontSize: '15px', color: '#1e293b', width: '100%'
@@ -222,7 +280,7 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
           />
           {query.length > 0 && (
             <button 
-              onClick={() => handleSearch('')}
+              onClick={() => { setQuery(''); setSearchResults([]); }}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: '16px' }}
             >
               ✕
@@ -230,16 +288,40 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
           )}
         </div>
 
-        {/* Search Results List */}
-        <div style={{ flex: '1', overflowY: 'auto', padding: '0 20px 20px 20px', minHeight: '300px' }}>
-          {results.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#94a3b8', gap: '6px' }}>
-              <span style={{ fontSize: '32px' }}>🎵</span>
-              <span style={{ fontSize: '13px', textAlign: 'center' }}>Không tìm thấy bài hát nào</span>
+        {/* Scrollable list content */}
+        <div style={{ flex: '1', overflowY: 'auto', padding: '0 20px 20px 20px', minHeight: '320px' }}>
+          
+          {/* Load indicator for Search Tab */}
+          {activeTab === 'search' && loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '8px', color: '#94a3b8' }}>
+              <div style={{ width: '24px', height: '24px', border: '3px solid #7c3aed', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: '13px' }}>Đang tìm kiếm...</span>
             </div>
-          ) : (
+          )}
+
+          {/* Error display */}
+          {activeTab === 'search' && !loading && error && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#94a3b8', gap: '6px' }}>
+              <span style={{ fontSize: '32px' }}>⚠️</span>
+              <span style={{ fontSize: '13px', textAlign: 'center' }}>{error}</span>
+            </div>
+          )}
+
+          {/* Idle message on Search Tab */}
+          {activeTab === 'search' && !loading && !error && query.trim().length === 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 20px', color: '#94a3b8', textAlign: 'center' }}>
+              <span style={{ fontSize: '44px', marginBottom: '8px' }}>🎧</span>
+              <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#475569' }}>Tìm kiếm bài hát yêu thích</h4>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', maxWidth: '280px', lineHeight: '1.4' }}>
+                Nhập tên bài hát hoặc nghệ sĩ để tìm kiếm đầy đủ trực tiếp từ kho âm nhạc iTunes.
+              </p>
+            </div>
+          )}
+
+          {/* List display */}
+          {!loading && !error && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {results.map((track) => {
+              {(activeTab === 'search' ? searchResults : lofiList).map((track) => {
                 const isPlaying = playingId === track.id;
                 return (
                   <div
@@ -252,10 +334,9 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
                       borderRadius: '14px',
                       backgroundColor: 'rgba(255,255,255,0.7)',
                       border: '1px solid #f1f5f9',
-                      transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Artwork / Play Button */}
+                    {/* Cover Art / Play trigger */}
                     <div
                       onClick={() => handlePlayToggle(track)}
                       style={{
@@ -269,31 +350,25 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
                       }}
                     >
                       <img
-                        src={track.artworkUrl}
+                        src={track.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'}
                         alt=""
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                       <div
                         style={{
                           position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          backgroundColor: 'rgba(0,0,0,0.3)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: '16px',
+                          top: 0, left: 0, right: 0, bottom: 0,
+                          backgroundColor: 'rgba(0,0,0,0.35)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'white', fontSize: '16px',
                         }}
                       >
                         {isPlaying ? '⏸' : '▶'}
                       </div>
                     </div>
 
-                    {/* Metadata */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Meta */}
+                    <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                       <h4
                         style={{
                           fontSize: '14px',
@@ -317,15 +392,17 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {track.artist} • {track.album}
+                        {track.artist} {track.album ? `• ${track.album}` : ''}
                       </p>
                     </div>
 
-                    {/* Action Select Button */}
+                    {/* Action Select */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
-                        {fmtDur(track.duration)}
-                      </span>
+                      {track.duration > 0 && (
+                        <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                          {fmtDur(track.duration)}
+                        </span>
+                      )}
                       <button
                         onClick={() => handleSelect(track)}
                         style={{
@@ -355,6 +432,14 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
               })}
             </div>
           )}
+
+          {/* Empty display search results */}
+          {activeTab === 'search' && !loading && query.trim().length > 0 && searchResults.length === 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#94a3b8' }}>
+              <span style={{ fontSize: '13px' }}>Không thấy kết quả phù hợp trên iTunes</span>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

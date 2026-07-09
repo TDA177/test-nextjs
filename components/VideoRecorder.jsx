@@ -43,9 +43,11 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
 
   const startCamera = async () => {
     stopCamera();
+    // Allow the browser/hardware some time to clean up active camera hooks
+    await new Promise((resolve) => setTimeout(resolve, 150));
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode },
+        video: { facingMode: { ideal: facingMode } },
         audio: true
       });
       videoStreamRef.current = stream;
