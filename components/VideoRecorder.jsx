@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import VideoEditor from './VideoEditor';
 import { useCameraStream } from '../utils/useCameraStream';
 import { getCameraErrorMessage } from '../utils/cameraSupport';
+import { getSupportedRecorderMimeType } from '../utils/videoUtils';
 
 export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const [screen, setScreen] = useState('idle'); // 'idle' | 'camera' | 'editor'
@@ -53,26 +54,30 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const startRecording = () => {
     if (!streamRef.current) return;
     chunksRef.current = [];
-    
-    // Select mime type support
-    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm;codecs=vp8,opus' };
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: 'video/webm' };
-      }
+
+    const mimeType = getSupportedRecorderMimeType();
+    if (!mimeType) {
+      alert('Thiết bị không hỗ trợ ghi video. Hãy chọn video từ thư viện.');
+      return;
     }
 
     try {
-      const recorder = new MediaRecorder(streamRef.current, options);
+      const recorder = new MediaRecorder(streamRef.current, { mimeType });
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
-      
+
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const type = recorder.mimeType || mimeType;
+        const blob = new Blob(chunksRef.current, { type });
+        if (blob.size === 0) {
+          alert('Không ghi được video. Hãy thử lại hoặc chọn từ thư viện.');
+          setScreen('camera');
+          retryCamera();
+          return;
+        }
         setRawFile(blob);
         stopCamera();
         setScreen('editor');

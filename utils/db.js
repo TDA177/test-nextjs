@@ -171,7 +171,7 @@ export async function deleteMediaBlob(mediaId) {
 const objectUrlMap = new Map();
 
 export async function getMediaUrl(mediaId) {
-  if (!mediaId) return null;
+  if (!mediaId || typeof mediaId !== 'string') return null;
   
   // If it's already an HTTP or Blob URL, return as-is
   if (mediaId.startsWith('http') || mediaId.startsWith('blob:')) {

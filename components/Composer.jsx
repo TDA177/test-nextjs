@@ -518,7 +518,10 @@ export default function Composer({ visible, existing, onClose, onSave }) {
       <VideoRecorder
         visible={videoRecorderOpen}
         onClose={() => setVideoRecorderOpen(false)}
-        onVideoSaved={(meta) => setVideo(meta)}
+        onVideoSaved={(meta) => {
+          suppressBackdropCloseUntilRef.current = Date.now() + 1500;
+          setVideo(meta);
+        }}
       />
 
       <PhotoCapture
