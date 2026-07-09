@@ -1,9 +1,11 @@
 // components/Timeline.jsx
 import React, { useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { moodById } from '../constants/moods';
 import TrackChip from './TrackChip';
 import VideoPlayer from './VideoPlayer';
 import PhotoPlayer from './PhotoPlayer';
+import MoodIcon from './ui/MoodIcon';
 
 function TimelineItem({ entry, isLast, onEdit, onDelete }) {
   const mood = moodById(entry.mood);
@@ -11,7 +13,6 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
 
   return (
     <div style={{ display: 'flex', position: 'relative', marginBottom: isLast ? '0' : '22px' }}>
-      {/* Time column */}
       <div
         style={{
           width: '50px',
@@ -21,13 +22,12 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
           fontWeight: '700',
           fontFamily: 'monospace',
           flexShrink: 0,
-          textAlign: 'left'
+          textAlign: 'left',
         }}
       >
         {entry.time}
       </div>
 
-      {/* Dot Column */}
       <div style={{ width: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
         <div
           style={{
@@ -39,23 +39,21 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '14px',
             zIndex: 2,
             boxShadow: 'var(--shadow-sm)',
-            userSelect: 'none'
+            userSelect: 'none',
           }}
         >
-          {mood.emoji}
+          <MoodIcon moodId={mood.id} size={15} color={mood.fg} />
         </div>
       </div>
 
-      {/* Content Column */}
       <div style={{ flex: 1, paddingLeft: '4px', textAlign: 'left', minWidth: 0 }}>
-        {/* Mood Pill */}
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
+            gap: '5px',
             padding: '3px 10px',
             borderRadius: '999px',
             backgroundColor: mood.bg,
@@ -63,20 +61,19 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
             fontWeight: '700',
             fontSize: '11px',
             marginBottom: '8px',
-            userSelect: 'none'
+            userSelect: 'none',
           }}
         >
-          {mood.emoji}  {mood.label}
+          <MoodIcon moodId={mood.id} size={12} color={mood.fg} />
+          {mood.label}
         </div>
 
-        {/* Note Text */}
         {entry.note && (
           <p style={{ fontSize: '15px', color: '#1e293b', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {entry.note}
           </p>
         )}
 
-        {/* Photo Player */}
         {entry.photo && (
           <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', maxWidth: '260px', border: '1px solid #f1f5f9' }}>
             <PhotoPlayer
@@ -87,7 +84,6 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
           </div>
         )}
 
-        {/* Video Player */}
         {entry.video && (
           <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', maxWidth: '280px', border: '1px solid #f1f5f9' }}>
             <VideoPlayer
@@ -99,47 +95,29 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
           </div>
         )}
 
-        {/* Track Chip */}
         {entry.track && (
           <div style={{ maxWidth: '240px' }}>
             <TrackChip track={entry.track} />
           </div>
         )}
 
-        {/* Actions Button */}
         <div style={{ display: 'flex', gap: '14px', marginTop: '10px', alignItems: 'center' }}>
-          <button
-            onClick={() => onEdit(entry)}
-            style={{
-              border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '12px',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-            }}
-          >
-            <span>✏️</span> sửa
+          <button type="button" className="ui-text-btn" onClick={() => onEdit(entry)}>
+            <Pencil size={13} strokeWidth={2} />
+            sửa
           </button>
 
           {!confirm ? (
-            <button
-              onClick={() => setConfirm(true)}
-              style={{
-                border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '12px',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-              }}
-            >
-              <span>🗑️</span> xoá
+            <button type="button" className="ui-text-btn" onClick={() => setConfirm(true)}>
+              <Trash2 size={13} strokeWidth={2} />
+              xoá
             </button>
           ) : (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button
-                onClick={() => { onDelete(entry); setConfirm(false); }}
-                style={{ border: 'none', background: 'transparent', color: '#e11d48', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
-              >
+              <button type="button" className="ui-text-btn ui-text-btn--danger" onClick={() => { onDelete(entry); setConfirm(false); }}>
                 Xoá thật?
               </button>
-              <button
-                onClick={() => setConfirm(false)}
-                style={{ border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '12px', cursor: 'pointer' }}
-              >
+              <button type="button" className="ui-text-btn" onClick={() => setConfirm(false)}>
                 huỷ
               </button>
             </div>
@@ -153,17 +131,16 @@ function TimelineItem({ entry, isLast, onEdit, onDelete }) {
 export default function Timeline({ entries, onEdit, onDelete }) {
   return (
     <div style={{ position: 'relative', padding: '6px 0' }}>
-      {/* Dashed vertical line */}
       <div
         style={{
           position: 'absolute',
-          left: '69px', // aligned with the center of the dots (50px time + 40px/2 dot)
+          left: '69px',
           top: '16px',
           bottom: '16px',
           width: '2px',
           borderLeft: '2px dashed #FBCFE8',
           zIndex: 1,
-          pointerEvents: 'none'
+          pointerEvents: 'none',
         }}
       />
       {entries.map((e, idx) => (

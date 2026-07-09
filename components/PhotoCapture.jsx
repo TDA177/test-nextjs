@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useCameraStream } from '../utils/useCameraStream';
 import { getCameraErrorMessage } from '../utils/cameraSupport';
+import IconButton from './ui/IconButton';
+import { X, RefreshCw, Camera } from 'lucide-react';
 
 export default function PhotoCapture({ visible, onClose, onPhotoCaptured, onFallbackToGallery }) {
   const [screen, setScreen] = useState('camera'); // 'camera' | 'preview'
@@ -135,42 +137,15 @@ export default function PhotoCapture({ visible, onClose, onPhotoCaptured, onFall
               zIndex: 10,
             }}
           >
-            <button
-              onClick={handleClose}
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(0,0,0,0.4)',
-                color: 'white',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              ✕
-            </button>
-            <button
-              onClick={toggleFacingMode}
+            <IconButton icon={X} label="Đóng" variant="dark" size="lg" onClick={handleClose} />
+            <IconButton
+              icon={RefreshCw}
+              label="Đổi camera"
+              variant="dark"
+              size="lg"
               disabled={!ready}
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(0,0,0,0.4)',
-                color: 'white',
-                cursor: ready ? 'pointer' : 'not-allowed',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: ready ? 1 : 0.4,
-              }}
-            >
-              🔄
-            </button>
+              onClick={toggleFacingMode}
+            />
           </div>
 
           <div
@@ -206,7 +181,12 @@ export default function PhotoCapture({ visible, onClose, onPhotoCaptured, onFall
               >
                 {errorMessage ? (
                   <div style={{ textAlign: 'center', padding: '0 32px' }}>
-                    <p style={{ fontSize: '40px', marginBottom: '16px' }}>📷</p>
+                    <div style={{
+                      width: 64, height: 64, borderRadius: 20, background: 'rgba(255,255,255,0.08)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+                    }}>
+                      <Camera size={28} strokeWidth={1.75} />
+                    </div>
                     <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5, marginBottom: '20px' }}>
                       {errorMessage}
                     </p>

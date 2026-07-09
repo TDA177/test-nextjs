@@ -4,6 +4,8 @@ import VideoEditor from './VideoEditor';
 import { useCameraStream } from '../utils/useCameraStream';
 import { getCameraErrorMessage } from '../utils/cameraSupport';
 import { getSupportedRecorderMimeType } from '../utils/videoUtils';
+import IconButton from './ui/IconButton';
+import { X, RefreshCw, FolderOpen } from 'lucide-react';
 
 export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const [screen, setScreen] = useState('idle'); // 'idle' | 'camera' | 'editor'
@@ -127,7 +129,8 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
 
   const handleEditorDone = ({ blob, timestamp, caption }) => {
     onVideoSaved({ file: blob, timestamp, caption });
-    onClose();
+    // Delay close so tap on XONG doesn't fall through to backdrop (iOS)
+    setTimeout(() => onClose(), 350);
   };
 
   const handleEditorClose = () => {
@@ -153,38 +156,25 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
         >
           {/* Top Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '50px 24px 8px 24px', zIndex: 10 }}>
-            <button
-              onClick={onClose}
-              style={{
-                width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}
-            >
-              ✕
-            </button>
+            <IconButton icon={X} label="Đóng" variant="dark" size="lg" onClick={onClose} />
             
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={toggleFacingMode}
+              <IconButton
+                icon={RefreshCw}
+                label="Đổi camera"
+                variant="dark"
+                size="lg"
                 disabled={recording || !ready}
-                style={{
-                  width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                  background: 'rgba(0,0,0,0.4)', color: 'white', cursor: (recording || !ready) ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: (recording || !ready) ? 0.4 : 1
-                }}
-              >
-                🔄
-              </button>
+                onClick={toggleFacingMode}
+              />
               
-              <button
+              <IconButton
+                icon={FolderOpen}
+                label="Chọn video"
+                variant="dark"
+                size="lg"
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                  background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                📁
-              </button>
+              />
             </div>
             
             <input

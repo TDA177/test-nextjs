@@ -2,6 +2,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ChevronLeft, ChevronRight, BookOpen, BarChart3, Plus, Sparkles,
+} from 'lucide-react';
 import BackgroundDecor from '../components/BackgroundDecor';
 import CalendarModal from '../components/CalendarModal';
 import Composer from '../components/Composer';
@@ -134,12 +137,8 @@ export default function HomeScreen() {
           padding: '24px 20px 12px 20px', position: 'relative', zIndex: 10
         }}
       >
-        <button
-          onClick={() => shiftDay(-1)}
-          className="btn-circle"
-          style={{ width: '44px', height: '44px', border: 'none', background: 'rgba(255,255,255,0.7)', fontSize: '18px', color: '#475569' }}
-        >
-          ◀
+        <button onClick={() => shiftDay(-1)} className="ui-nav-btn" aria-label="Ngày trước">
+          <ChevronLeft size={20} strokeWidth={2.5} />
         </button>
 
         <div 
@@ -155,12 +154,8 @@ export default function HomeScreen() {
           </p>
         </div>
 
-        <button
-          onClick={() => shiftDay(1)}
-          className="btn-circle"
-          style={{ width: '44px', height: '44px', border: 'none', background: 'rgba(255,255,255,0.7)', fontSize: '18px', color: '#475569' }}
-        >
-          ▶
+        <button onClick={() => shiftDay(1)} className="ui-nav-btn" aria-label="Ngày sau">
+          <ChevronRight size={20} strokeWidth={2.5} />
         </button>
       </header>
 
@@ -174,32 +169,35 @@ export default function HomeScreen() {
 
       {/* DIARY LIST TIMELINE */}
       <section style={{ padding: '0 20px', marginTop: '20px', position: 'relative', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '18px' }}>📔</span>
-          <h3 style={{ fontSize: '19px', fontWeight: '800', color: '#1E293B' }}>
-            Nhật ký trong ngày
-          </h3>
+        <div className="ui-section-heading">
+          <span className="ui-section-heading__icon">
+            <BookOpen size={18} strokeWidth={2.25} />
+          </span>
+          <h3 className="ui-section-heading__title">Nhật ký trong ngày</h3>
         </div>
 
         <div className="glass-card">
           {loading ? (
             <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
-              <div style={{ width: '20px', height: '20px', border: '2px solid #cbd5e1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              <div className="ui-spinner" />
               <span style={{ fontSize: '13px' }}>Đang mở sổ tay...</span>
             </div>
           ) : entries.length === 0 ? (
-            <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <span style={{ fontSize: '44px', marginBottom: '4px' }}>📓</span>
-              <h4 style={{ fontSize: '16px', fontWeight: '800', color: '#334155' }}>Chưa có ghi chú nào</h4>
-              <p style={{ fontSize: '13px', color: '#64748B', marginTop: '6px', maxWidth: '260px', lineHeight: '1.4' }}>
+            <div className="ui-empty-state">
+              <div className="ui-empty-state__icon">
+                <BookOpen size={28} strokeWidth={2} />
+              </div>
+              <h4 className="ui-empty-state__title">Chưa có ghi chú nào</h4>
+              <p className="ui-empty-state__desc">
                 Hãy ghi lại điều gì đó nhỏ xinh trong ngày — một câu nói, một tấm ảnh, một chiếc tâm trạng.
               </p>
               <button
                 onClick={() => { setEditing(null); setComposerOpen(true); }}
                 className="btn-primary"
-                style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '999px', fontSize: '14px' }}
+                style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '999px', fontSize: '14px', gap: '6px' }}
               >
-                + Thêm ghi chú đầu tiên
+                <Plus size={16} strokeWidth={2.5} />
+                Thêm ghi chú đầu tiên
               </button>
             </div>
           ) : (
@@ -214,46 +212,34 @@ export default function HomeScreen() {
 
       {/* STATS BUTTON */}
       <section style={{ padding: '0 20px', marginTop: '20px', position: 'relative', zIndex: 10 }}>
-        <button
-          onClick={() => setStatsOpen(true)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
-            backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.6)',
-            borderRadius: '22px', padding: '14px', cursor: 'pointer', transition: 'all 0.2s ease',
-            boxShadow: 'var(--shadow-sm)'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <div style={{ width: '44px', height: '44px', borderRadius: '14px', backgroundColor: '#FFE3F1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-            📊
+        <button type="button" className="ui-stat-card" onClick={() => setStatsOpen(true)}>
+          <div className="ui-stat-card__icon">
+            <BarChart3 size={20} strokeWidth={2.25} />
           </div>
-          
-          <div style={{ flex: 1, textAlign: 'left' }}>
-            <h4 style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>Thống kê</h4>
-            <p style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+          <div style={{ flex: 1 }}>
+            <h4 className="ui-stat-card__title">Thống kê</h4>
+            <p className="ui-stat-card__desc">
               {allDates.length} ngày đã ghi · chạm để xem
             </p>
           </div>
-          
-          <span style={{ color: '#cbd5e1', fontSize: '20px' }}>➔</span>
+          <ChevronRight size={20} className="ui-stat-card__arrow" strokeWidth={2} />
         </button>
       </section>
 
       {/* FLOATING ACTION BUTTON (FAB) */}
       <button
+        type="button"
+        className="ui-fab"
         onClick={() => { setEditing(null); setComposerOpen(true); }}
-        className="btn-circle"
-        style={{
-          position: 'fixed', bottom: '24px', right: 'calc(50% - 240px + 24px)', // floating aligned within 480px width
-          width: '64px', height: '64px', border: 'none', background: 'var(--primary-gradient)',
-          color: 'white', fontSize: '32px', boxShadow: '0 8px 24px rgba(255, 143, 177, 0.4)',
-          zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
+        aria-label="Thêm ghi chú"
       >
-        <span>+</span>
-        <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '22px', height: '22px', borderRadius: '50%', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
-          ✨
+        <Plus size={28} strokeWidth={2.5} />
+        <div style={{
+          position: 'absolute', top: '-2px', right: '-2px', width: '22px', height: '22px',
+          borderRadius: '50%', backgroundColor: 'white', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.1)', color: '#DB2777',
+        }}>
+          <Sparkles size={10} strokeWidth={2.5} />
         </div>
       </button>
 
@@ -279,15 +265,6 @@ export default function HomeScreen() {
         onJump={(d) => { setDate(d); setStatsOpen(false); }}
         onClose={() => setStatsOpen(false)}
       />
-
-      {/* Custom responsive media query spacing in case screen is smaller than 480px */}
-      <style>{`
-        @media (max-width: 480px) {
-          .btn-circle {
-            right: 24px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

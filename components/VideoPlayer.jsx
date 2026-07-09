@@ -1,7 +1,7 @@
 // components/VideoPlayer.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { Music, Video, Maximize2, Play, X, AlertCircle } from 'lucide-react';
 import { getMediaUrl } from '../utils/db';
-import { blobToVideoUrl } from '../utils/videoUtils';
 
 function WaveBarsSmall() {
   return (
@@ -59,7 +59,7 @@ function StoryMusicSticker({ track }) {
         {track.artworkUrl ? (
           <img src={track.artworkUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
         ) : (
-          <span style={{ fontSize: '12px' }}>🎵</span>
+          <Music size={12} strokeWidth={2.25} aria-hidden />
         )}
       </div>
       
@@ -90,10 +90,10 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
   const fullVideoRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Resolve video URL from Blob, File, or IndexedDB id
+  // Resolve video URL from blob URL string, Blob, or IndexedDB id
   useEffect(() => {
     let active = true;
-    let localObjectUrl = null;
+    let ownedUrl = null;
 
     async function loadUrl() {
       if (!uri) {
@@ -101,15 +101,20 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
         return;
       }
 
-      const direct = blobToVideoUrl(uri);
-      if (direct) {
-        localObjectUrl = direct.startsWith('blob:') ? direct : null;
-        if (active) setVideoUrl(direct);
+      if (typeof uri === 'string') {
+        if (uri.startsWith('blob:') || uri.startsWith('http')) {
+          if (active) setVideoUrl(uri);
+          return;
+        }
+        const url = await getMediaUrl(uri);
+        if (active) setVideoUrl(url || '');
         return;
       }
 
-      const url = await getMediaUrl(uri);
-      if (active) setVideoUrl(url || '');
+      if (uri instanceof Blob || uri instanceof File) {
+        ownedUrl = URL.createObjectURL(uri);
+        if (active) setVideoUrl(ownedUrl);
+      }
     }
 
     setError(false);
@@ -117,7 +122,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
 
     return () => {
       active = false;
-      if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
     };
   }, [uri]);
 
@@ -222,7 +227,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           background: '#111', borderRadius: '16px', color: 'rgba(255,255,255,0.5)', gap: '8px', ...style
         }}
       >
-        <span>⚠️</span>
+        <AlertCircle size={22} strokeWidth={2} />
         <span style={{ fontSize: '12px' }}>Không thể phát video</span>
       </div>
     );
@@ -231,7 +236,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
   if (!videoUrl) {
     return (
       <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', borderRadius: '16px', ...style }}>
-        <div style={{ width: '20px', height: '20px', border: '2px solid #cbd5e1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <div className="ui-spinner" />
       </div>
     );
   }
@@ -296,18 +301,18 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '14px'
             }}
           >
-            ⤢
+            <Maximize2 size={14} strokeWidth={2.25} />
           </div>
           
           <button
             onClick={handleInlinePlayPause}
             style={{
               width: '48px', height: '48px', borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.3)',
-              backgroundColor: 'rgba(0,0,0,0.45)', color: 'white', fontSize: '20px', cursor: 'pointer',
+              backgroundColor: 'rgba(0,0,0,0.45)', color: 'white', cursor: 'pointer',
               display: isPlaying ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center'
             }}
           >
-            ▶
+            <Play size={20} fill="white" strokeWidth={0} />
           </button>
         </div>
 
@@ -325,7 +330,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
               cursor: 'pointer', zIndex: 20
             }}
           >
-            ✕
+            <X size={16} strokeWidth={2.25} />
           </button>
         )}
 
@@ -336,7 +341,8 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,143,177,0.8)', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: '800', color: 'white' }}>
-              🎥 VIDEO
+              <Video size={10} strokeWidth={2.5} />
+              VIDEO
             </div>
           </div>
         </div>
@@ -390,7 +396,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           >
             {!fullPlaying && (
               <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: '1.5px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', color: 'white' }}>
-                ▶
+                <Play size={28} fill="white" strokeWidth={0} />
               </div>
             )}
           </div>
@@ -404,7 +410,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FF8FB1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', border: '1px solid rgba(255,255,255,0.2)' }}>
-                  🎥
+                  <Video size={14} strokeWidth={2.25} color="white" />
                 </div>
                 <div style={{ textAlign: 'left' }}>
                   <p style={{ color: 'white', fontSize: '13px', fontWeight: '700', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>Nhật ký</p>
@@ -420,7 +426,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
               >
-                ✕
+                <X size={18} strokeWidth={2} />
               </button>
             </div>
           </div>
