@@ -1,6 +1,7 @@
 // components/VideoPlayer.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { getMediaUrl } from '../utils/db';
+import { blobToVideoUrl } from '../utils/videoUtils';
 
 function WaveBarsSmall() {
   return (
@@ -89,18 +90,34 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
   const fullVideoRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Resolve IndexedDB video blob URL
+  // Resolve video URL from Blob, File, or IndexedDB id
   useEffect(() => {
     let active = true;
+    let localObjectUrl = null;
+
     async function loadUrl() {
-      if (uri) {
-        const url = await getMediaUrl(uri);
-        if (active) setVideoUrl(url || uri);
+      if (!uri) {
+        if (active) setVideoUrl('');
+        return;
       }
+
+      const direct = blobToVideoUrl(uri);
+      if (direct) {
+        localObjectUrl = direct.startsWith('blob:') ? direct : null;
+        if (active) setVideoUrl(direct);
+        return;
+      }
+
+      const url = await getMediaUrl(uri);
+      if (active) setVideoUrl(url || '');
     }
+
+    setError(false);
     loadUrl();
+
     return () => {
       active = false;
+      if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
     };
   }, [uri]);
 

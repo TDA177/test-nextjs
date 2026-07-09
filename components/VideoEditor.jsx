@@ -83,6 +83,7 @@ export default function VideoEditor({ visible, videoFile, onClose, onDone }) {
             muted
             playsInline
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={() => setVideoUrl('')}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#111' }} />
