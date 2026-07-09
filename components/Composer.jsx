@@ -43,6 +43,8 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   
   const photoInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const prevPhotoUrlRef = useRef(null);
 
   // Reset fields when modal is opened
   useEffect(() => {
@@ -70,14 +72,23 @@ export default function Composer({ visible, existing, onClose, onSave }) {
     }
   }, [visible, existing]);
 
-  // Clean up object URLs on unmount/close
+  // Revoke previous blob URL when photoUrl changes (not current one)
+  useEffect(() => {
+    const prev = prevPhotoUrlRef.current;
+    if (prev && prev !== photoUrl && prev.startsWith('blob:')) {
+      URL.revokeObjectURL(prev);
+    }
+    prevPhotoUrlRef.current = photoUrl;
+  }, [photoUrl]);
+
+  // Cleanup on unmount only
   useEffect(() => {
     return () => {
-      if (photoUrl && photoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(photoUrl);
+      if (prevPhotoUrlRef.current && prevPhotoUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(prevPhotoUrlRef.current);
       }
     };
-  }, [photoUrl]);
+  }, []);
 
   const resolvePhotoUrl = async (val) => {
     if (val instanceof File || val instanceof Blob) {
@@ -93,8 +104,18 @@ export default function Composer({ visible, existing, onClose, onSave }) {
     const file = e.target.files?.[0];
     if (file) {
       setPhoto(file);
-      resolvePhotoUrl(file);
+      // Read the file into a Blob first, then create URL (iOS Safari fix)
+      const reader = new FileReader();
+      reader.onload = () => {
+        const blob = new Blob([reader.result], { type: file.type || 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        setPhoto(blob); // Use the blob instead of File for iOS compat
+        setPhotoUrl(url);
+      };
+      reader.readAsArrayBuffer(file);
     }
+    // Reset input value so same file can be re-selected
+    e.target.value = '';
   };
 
   const handleRemovePhoto = () => {
@@ -281,6 +302,18 @@ export default function Composer({ visible, existing, onClose, onSave }) {
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
+                onClick={() => cameraInputRef.current?.click()}
+                style={{
+                  flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #FED7AA',
+                  backgroundColor: '#FFF7ED', color: '#EA580C', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px', fontWeight: '700', gap: '4px'
+                }}
+              >
+                <span style={{ fontSize: '24px' }}>📷</span>
+                Chụp ảnh
+              </button>
+              <button
                 onClick={() => photoInputRef.current?.click()}
                 style={{
                   flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #BFDBFE',
@@ -290,8 +323,18 @@ export default function Composer({ visible, existing, onClose, onSave }) {
                 }}
               >
                 <span style={{ fontSize: '24px' }}>🖼️</span>
-                Thêm ảnh
+                Thư viện
               </button>
+              {/* Camera capture input (opens camera directly on iOS) */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoUpload}
+                style={{ display: 'none' }}
+              />
+              {/* Gallery picker input (no capture attr = opens file picker) */}
               <input
                 ref={photoInputRef}
                 type="file"

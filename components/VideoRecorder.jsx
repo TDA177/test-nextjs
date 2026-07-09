@@ -43,20 +43,30 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
 
   const startCamera = async () => {
     stopCamera();
-    // Allow the browser/hardware some time to clean up active camera hooks
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
-        audio: true
-      });
-      videoStreamRef.current = stream;
-      if (videoElemRef.current) {
-        videoElemRef.current.srcObject = stream;
+    // Allow the browser/hardware some time to release camera device
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    
+    // Try exact facingMode first (required for back camera on many iOS devices),
+    // fall back to ideal if exact is not supported
+    const constraints = [
+      { video: { facingMode: { exact: facingMode } }, audio: true },
+      { video: { facingMode: facingMode }, audio: true },
+      { video: true, audio: true },
+    ];
+    
+    for (const constraint of constraints) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraint);
+        videoStreamRef.current = stream;
+        if (videoElemRef.current) {
+          videoElemRef.current.srcObject = stream;
+        }
+        return; // success, stop trying
+      } catch (err) {
+        console.warn('Camera constraint failed, trying next:', constraint, err);
       }
-    } catch (err) {
-      console.warn('Failed to access camera:', err);
     }
+    console.error('All camera constraints failed');
   };
 
   const stopCamera = () => {
