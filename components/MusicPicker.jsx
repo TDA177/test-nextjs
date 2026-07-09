@@ -86,16 +86,15 @@ const CURATED_TRACKS = [
 ];
 
 async function searchTracksFromITunes(query, limit = 25) {
-  const url =
-    `https://itunes.apple.com/search?` +
-    `term=${encodeURIComponent(query)}` +
-    `&media=music&entity=song&limit=${limit}&country=vn`;
-
+  const url = `/api/itunes/search?term=${encodeURIComponent(query)}&limit=${limit}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`iTunes API status ${res.status}`);
   const json = await res.json();
 
-  return json.results.map((t) => ({
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Search API status ${res.status}`);
+  }
+
+  return (json.results || []).map((t) => ({
     id: String(t.trackId),
     title: t.trackName,
     artist: t.artistName,
@@ -157,8 +156,8 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
       const tracks = await searchTracksFromITunes(q);
       setSearchResults(tracks);
     } catch (err) {
-      console.error(err);
-      setError('Lỗi kết nối thư viện nhạc iTunes.');
+      console.error('iTunes search failed:', err);
+      setError('Không tìm được nhạc. Kiểm tra mạng rồi thử lại.');
       setSearchResults([]);
     } finally {
       setLoading(false);
@@ -173,7 +172,12 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
   };
 
   const handlePlayToggle = (track) => {
-    if (!track.previewUrl) return;
+    if (!track.previewUrl) {
+      setError('Bài này không có bản nghe thử trên iTunes.');
+      return;
+    }
+
+    setError(null);
 
     if (playingId === track.id) {
       stopAudio();
@@ -195,6 +199,7 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
       })
       .catch((err) => {
         console.warn('Failed to play audio preview:', err);
+        setError('Không phát được bản nghe thử. Thử bài khác hoặc vẫn có thể thêm nhạc.');
       });
   };
 
@@ -299,7 +304,7 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
             </div>
           )}
 
-          {/* Error display */}
+          {/* Error display (search errors + preview errors) */}
           {activeTab === 'search' && !loading && error && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#94a3b8', gap: '6px' }}>
               <span style={{ fontSize: '32px' }}>⚠️</span>
@@ -319,10 +324,11 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
           )}
 
           {/* List display */}
-          {!loading && !error && (
+          {!loading && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {(activeTab === 'search' ? searchResults : lofiList).map((track) => {
                 const isPlaying = playingId === track.id;
+                const canPreview = !!track.previewUrl;
                 return (
                   <div
                     key={track.id}
@@ -338,15 +344,16 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
                   >
                     {/* Cover Art / Play trigger */}
                     <div
-                      onClick={() => handlePlayToggle(track)}
+                      onClick={() => canPreview && handlePlayToggle(track)}
                       style={{
                         position: 'relative',
                         width: '46px',
                         height: '46px',
                         borderRadius: '10px',
                         overflow: 'hidden',
-                        cursor: 'pointer',
-                        flexShrink: 0
+                        cursor: canPreview ? 'pointer' : 'default',
+                        flexShrink: 0,
+                        opacity: canPreview ? 1 : 0.55,
                       }}
                     >
                       <img
@@ -363,7 +370,7 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
                           color: 'white', fontSize: '16px',
                         }}
                       >
-                        {isPlaying ? '⏸' : '▶'}
+                        {canPreview ? (isPlaying ? '⏸' : '▶') : '—'}
                       </div>
                     </div>
 
@@ -434,7 +441,7 @@ export default function MusicPicker({ visible, onClose, onSelect }) {
           )}
 
           {/* Empty display search results */}
-          {activeTab === 'search' && !loading && query.trim().length > 0 && searchResults.length === 0 && (
+          {activeTab === 'search' && !loading && !error && query.trim().length > 0 && searchResults.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#94a3b8' }}>
               <span style={{ fontSize: '13px' }}>Không thấy kết quả phù hợp trên iTunes</span>
             </div>
