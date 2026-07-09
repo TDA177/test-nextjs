@@ -3,10 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MOODS } from '../constants/moods';
 import { pad, parseTime } from '../utils/helpers';
 import { saveMediaBlob, deleteMediaBlob, getMediaUrl } from '../utils/db';
+import { normalizeImageToJpeg } from '../utils/imageUtils';
+import { canUseInAppCamera } from '../utils/cameraSupport';
 import MusicPicker from './MusicPicker';
 import TrackChip from './TrackChip';
 import VideoPlayer from './VideoPlayer';
 import VideoRecorder from './VideoRecorder';
+import PhotoCapture from './PhotoCapture';
 
 function Label({ icon, text }) {
   return (
@@ -41,34 +44,70 @@ export default function Composer({ visible, existing, onClose, onSave }) {
 
   const [musicPickerOpen, setMusicPickerOpen] = useState(false);
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false);
   
   const photoInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  const nativeCaptureRef = useRef(null);
   const prevPhotoUrlRef = useRef(null);
+  const modalWasOpenRef = useRef(false);
+  const nativePickerActiveRef = useRef(false);
+  const suppressBackdropCloseUntilRef = useRef(0);
 
-  // Reset fields when modal is opened
+  // iOS fires ghost clicks on backdrop after returning from native camera
   useEffect(() => {
-    if (visible) {
-      const initialTime = existing?.time || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
-      setTime(initialTime);
-      setTimePicked(existing?.timePicked || false);
-      setMoodId(existing?.mood || 'yeu');
-      setNote(existing?.note || '');
-      setTrack(existing?.track || null);
-      
-      if (existing?.photo) {
-        setPhoto(existing.photo);
-        resolvePhotoUrl(existing.photo);
-      } else {
-        setPhoto(null);
-        setPhotoUrl(null);
-      }
+    const onReturn = () => {
+      suppressBackdropCloseUntilRef.current = Date.now() + 2000;
+      // Reset picker lock after a delay (onChange may arrive late)
+      setTimeout(() => {
+        nativePickerActiveRef.current = false;
+      }, 3000);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onReturn();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, []);
 
-      if (existing?.video) {
-        setVideo(existing.video);
-      } else {
-        setVideo(null);
-      }
+  const handleBackdropClose = () => {
+    if (Date.now() < suppressBackdropCloseUntilRef.current) return;
+    if (nativePickerActiveRef.current) return;
+    if (photoCaptureOpen || videoRecorderOpen || musicPickerOpen) return;
+    onClose();
+  };
+
+  // Initialize fields only when modal opens (not on every re-render)
+  useEffect(() => {
+    if (!visible) {
+      modalWasOpenRef.current = false;
+      return;
+    }
+    if (modalWasOpenRef.current) return;
+    modalWasOpenRef.current = true;
+
+    const initialTime = existing?.time || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
+    setTime(initialTime);
+    setTimePicked(existing?.timePicked || false);
+    setMoodId(existing?.mood || 'yeu');
+    setNote(existing?.note || '');
+    setTrack(existing?.track || null);
+
+    if (existing?.photo) {
+      setPhoto(existing.photo);
+      resolvePhotoUrl(existing.photo);
+    } else {
+      setPhoto(null);
+      setPhotoUrl(null);
+    }
+
+    if (existing?.video) {
+      setVideo(existing.video);
+    } else {
+      setVideo(null);
     }
   }, [visible, existing]);
 
@@ -100,22 +139,56 @@ export default function Composer({ visible, existing, onClose, onSave }) {
     }
   };
 
-  const handlePhotoUpload = (e) => {
+  const applyPhoto = (blob) => {
+    const url = URL.createObjectURL(blob);
+    setPhoto(blob);
+    setPhotoUrl(url);
+  };
+
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setPhoto(file);
-      // Read the file into a Blob first, then create URL (iOS Safari fix)
-      const reader = new FileReader();
-      reader.onload = () => {
-        const blob = new Blob([reader.result], { type: file.type || 'image/jpeg' });
-        const url = URL.createObjectURL(blob);
-        setPhoto(blob); // Use the blob instead of File for iOS compat
-        setPhotoUrl(url);
-      };
-      reader.readAsArrayBuffer(file);
-    }
-    // Reset input value so same file can be re-selected
     e.target.value = '';
+    nativePickerActiveRef.current = false;
+    suppressBackdropCloseUntilRef.current = Date.now() + 1500;
+    if (!file || file.size === 0) return;
+
+    try {
+      const blob = await normalizeImageToJpeg(file);
+      applyPhoto(blob);
+    } catch (err) {
+      console.error('Failed to process photo:', err);
+      alert('Không đọc được ảnh. Hãy thử chụp lại hoặc chọn ảnh khác.');
+    }
+  };
+
+  const handlePhotoCaptured = (blob) => {
+    applyPhoto(blob);
+  };
+
+  const handleOpenCamera = () => {
+    if (canUseInAppCamera()) {
+      setPhotoCaptureOpen(true);
+    } else {
+      nativePickerActiveRef.current = true;
+      suppressBackdropCloseUntilRef.current = Date.now() + 5000;
+      nativeCaptureRef.current?.click();
+    }
+  };
+
+  const handleOpenGallery = () => {
+    nativePickerActiveRef.current = true;
+    suppressBackdropCloseUntilRef.current = Date.now() + 5000;
+    photoInputRef.current?.click();
+  };
+
+  const handleFallbackPhotoFile = async (file) => {
+    try {
+      const blob = await normalizeImageToJpeg(file);
+      applyPhoto(blob);
+    } catch (err) {
+      console.error('Failed to process photo:', err);
+      alert('Không đọc được ảnh. Hãy thử chọn ảnh khác.');
+    }
   };
 
   const handleRemovePhoto = () => {
@@ -188,7 +261,8 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   const canSave = note.trim().length > 0;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <>
+    <div className="modal-backdrop" onClick={handleBackdropClose}>
       <div 
         className="modal-sheet" 
         style={{ display: 'flex', flexDirection: 'column' }} 
@@ -286,8 +360,17 @@ export default function Composer({ visible, existing, onClose, onSave }) {
           {/* Photo Selection */}
           <Label icon="📸" text="Ảnh (tuỳ chọn)" />
           {photoUrl ? (
-            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
-              <img src={photoUrl} alt="" style={{ width: '100%', height: '220px', objectFit: 'cover' }} />
+            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0', background: '#f1f5f9', minHeight: '220px' }}>
+              <img
+                src={photoUrl}
+                alt="Ảnh đã chọn"
+                style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }}
+                onError={() => {
+                  console.error('Preview failed for:', photoUrl);
+                  setPhotoUrl(null);
+                  setPhoto(null);
+                }}
+              />
               <button
                 onClick={handleRemovePhoto}
                 style={{
@@ -302,7 +385,7 @@ export default function Composer({ visible, existing, onClose, onSave }) {
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={handleOpenCamera}
                 style={{
                   flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #FED7AA',
                   backgroundColor: '#FFF7ED', color: '#EA580C', cursor: 'pointer',
@@ -314,7 +397,7 @@ export default function Composer({ visible, existing, onClose, onSave }) {
                 Chụp ảnh
               </button>
               <button
-                onClick={() => photoInputRef.current?.click()}
+                onClick={handleOpenGallery}
                 style={{
                   flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #BFDBFE',
                   backgroundColor: '#EFF6FF', color: '#3B82F6', cursor: 'pointer',
@@ -325,20 +408,20 @@ export default function Composer({ visible, existing, onClose, onSave }) {
                 <span style={{ fontSize: '24px' }}>🖼️</span>
                 Thư viện
               </button>
-              {/* Camera capture input (opens camera directly on iOS) */}
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handlePhotoUpload}
-                style={{ display: 'none' }}
-              />
-              {/* Gallery picker input (no capture attr = opens file picker) */}
+              {/* Gallery picker input */}
               <input
                 ref={photoInputRef}
                 type="file"
                 accept="image/*"
+                onChange={handlePhotoUpload}
+                style={{ display: 'none' }}
+              />
+              {/* Native camera fallback for HTTP / no webcam */}
+              <input
+                ref={nativeCaptureRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
                 onChange={handlePhotoUpload}
                 style={{ display: 'none' }}
               />
@@ -423,20 +506,27 @@ export default function Composer({ visible, existing, onClose, onSave }) {
 
         </div>
       </div>
+    </div>
 
-      {/* Music Picker Modal */}
+      {/* Overlays rendered outside backdrop to avoid iOS ghost-click closing modal */}
       <MusicPicker
         visible={musicPickerOpen}
         onClose={() => setMusicPickerOpen(false)}
         onSelect={(t) => setTrack(t)}
       />
 
-      {/* Video Recorder / Upload Modal */}
       <VideoRecorder
         visible={videoRecorderOpen}
         onClose={() => setVideoRecorderOpen(false)}
-        onVideoSaved={(meta) => setVideo(meta)} // meta = { file (Blob), timestamp, caption }
+        onVideoSaved={(meta) => setVideo(meta)}
       />
-    </div>
+
+      <PhotoCapture
+        visible={photoCaptureOpen}
+        onClose={() => setPhotoCaptureOpen(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        onFallbackToGallery={handleFallbackPhotoFile}
+      />
+    </>
   );
 }
