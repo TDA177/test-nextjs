@@ -12,6 +12,8 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const [recording, setRecording] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState(null);
   
   const videoElemRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -26,6 +28,8 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
       setRawFile(null);
       setRecording(false);
       setRecordSecs(0);
+      setReady(false);
+      setError(null);
     } else {
       stopCamera();
       clearInterval(timerRef.current);
@@ -49,6 +53,8 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
 
   const startCamera = async () => {
     stopCamera();
+    setReady(false);
+    setError(null);
 
     // Unique ID to detect if another startCamera call superseded this one
     const thisId = ++cameraStartIdRef.current;
@@ -81,12 +87,14 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
         if (videoElemRef.current) {
           videoElemRef.current.srcObject = stream;
         }
+        setReady(true);
         return; // success
       } catch (err) {
         console.warn('Camera constraint failed, trying next:', err.message);
       }
     }
     console.error('All camera constraints failed');
+    setError(new Error('Không thể kết nối với camera. Vui lòng cấp quyền hoặc kiểm tra thiết bị.'));
   };
 
   const stopCamera = () => {

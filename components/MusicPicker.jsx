@@ -86,7 +86,8 @@ const CURATED_TRACKS = [
 ];
 
 async function searchTracksFromITunes(query, limit = 25) {
-  const url = `/api/itunes/search?term=${encodeURIComponent(query)}&limit=${limit}`;
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const url = `${baseUrl}/api/itunes/search?term=${encodeURIComponent(query)}&limit=${limit}`;
   const res = await fetch(url);
   const json = await res.json();
 
