@@ -1,11 +1,8 @@
 // public/sw.js
-const CACHE_NAME = 'nhat-ky-be-xinh-cache-v1';
+const CACHE_NAME = 'nhat-ky-be-xinh-cache-v2';
 const ASSETS_TO_CACHE = [
-  '/',
   '/manifest.json',
   '/favicon.ico',
-  // Next.js chunks will be cached automatically dynamically,
-  // but we can list base styles or elements here if desired.
 ];
 
 self.addEventListener('install', (event) => {
@@ -33,25 +30,22 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests and skip browser extensions (chrome-extension://)
+  // Only cache GET requests from our origin
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
+  const url = new URL(event.request.url);
+
+  // NEVER cache HTML page navigations or API routes — let them go to network directly
+  if (event.request.mode === 'navigate' || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // For static assets only: cache-first strategy
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch in background to update cache (stale-while-revalidate)
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, networkResponse);
-              });
-            }
-          })
-          .catch(() => {}); // ignore network errors offline
-        
         return cachedResponse;
       }
 
@@ -69,7 +63,7 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // If offline and request fails, we can return cached index page for navigations
+          // Offline fallback for navigations only
           if (event.request.mode === 'navigate') {
             return caches.match('/');
           }

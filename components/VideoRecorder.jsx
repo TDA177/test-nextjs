@@ -1,7 +1,6 @@
 // components/VideoRecorder.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import VideoEditor from './VideoEditor';
-import { useCameraStream } from '../utils/useCameraStream';
 import { getCameraErrorMessage } from '../utils/cameraSupport';
 import { getSupportedRecorderMimeType } from '../utils/videoUtils';
 import IconButton from './ui/IconButton';
@@ -19,13 +18,7 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  const { streamRef, stopCamera, retryCamera, error, ready } = useCameraStream({
-    active: visible && screen === 'camera',
-    facingMode,
-    videoRef: videoElemRef,
-    includeAudio: true,
-  });
+  const videoStreamRef = useRef(null);
 
   useEffect(() => {
     if (visible) {

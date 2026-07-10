@@ -1,16 +1,5 @@
 // app/layout.js
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const viewport = {
   themeColor: "#FF8FB1",
@@ -34,7 +23,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="vi" className={`${geistSans.className} ${geistMono.className}`}>
+    <html lang="vi">
       <head>
         <meta name="application-name" content="Nhật ký bé xinh" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

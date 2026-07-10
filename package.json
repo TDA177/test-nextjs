@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --require ./set-dns.js node_modules/next/dist/bin/next dev",
     "build": "next build",
     "build:mobile": "node scripts/build-mobile.js",
     "start": "next start",

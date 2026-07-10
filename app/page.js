@@ -19,6 +19,7 @@ export default function HomeScreen() {
   const [date, setDate] = useState(new Date());
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -28,16 +29,26 @@ export default function HomeScreen() {
   const dateKey = toKey(date);
   const isToday = sameDay(date, new Date());
 
-  // Register PWA service worker
+  // Register PWA service worker (dev unregister, prod register)
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then((reg) => console.log('Service Worker registered successfully:', reg.scope))
-          .catch((err) => console.warn('Service Worker registration failed:', err));
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    if (process.env.NODE_ENV === 'development') {
+      // Unregister any existing service workers to prevent reload loops
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((reg) => reg.unregister());
       });
+      return;
     }
+
+    // Production registration
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((reg) => console.log('Service Worker registered:', reg.scope))
+        .catch((err) => console.warn('Service Worker registration failed:', err));
+    });
   }, []);
+
 
   // LOAD ENTRIES
   useEffect(() => {
@@ -45,10 +56,19 @@ export default function HomeScreen() {
 
     (async () => {
       setLoading(true);
-      const arr = await getEntries(dateKey);
-      if (active) {
-        setEntries(arr.sort((a, b) => a.time.localeCompare(b.time)));
-        setLoading(false);
+      try {
+        const arr = await getEntries(dateKey);
+        if (active) {
+          setEntries(arr.sort((a, b) => a.time.localeCompare(b.time)));
+          setDbError(false);
+        }
+      } catch {
+        if (active) {
+          setEntries([]);
+          setDbError(true);
+        }
+      } finally {
+        if (active) setLoading(false);
       }
     })();
 
@@ -59,8 +79,12 @@ export default function HomeScreen() {
 
   // REFRESH ACTIVE DATES LIST
   const refreshAllDates = useCallback(async () => {
-    const ds = await listEntryDates();
-    setAllDates(ds);
+    try {
+      const ds = await listEntryDates();
+      setAllDates(ds);
+    } catch {
+      // silently ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -181,6 +205,21 @@ export default function HomeScreen() {
             <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
               <div className="ui-spinner" />
               <span style={{ fontSize: '13px' }}>Đang mở sổ tay...</span>
+            </div>
+          ) : dbError ? (
+            <div style={{ padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', color: '#94a3b8', textAlign: 'center' }}>
+              <span style={{ fontSize: '36px' }}>📡</span>
+              <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#64748B' }}>Chưa kết nối được máy chủ</h4>
+              <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.5' }}>
+                Có thể do mạng bị chặn hoặc server chưa sẵn sàng. Dữ liệu sẽ hiển thị khi kết nối lại.
+              </p>
+              <button
+                onClick={() => { setDbError(false); setLoading(true); getEntries(dateKey).then(arr => { setEntries(arr.sort((a, b) => a.time.localeCompare(b.time))); setDbError(false); }).catch(() => setDbError(true)).finally(() => setLoading(false)); }}
+                className="btn-primary"
+                style={{ marginTop: '8px', padding: '10px 20px', borderRadius: '999px', fontSize: '13px' }}
+              >
+                🔄 Thử lại
+              </button>
             </div>
           ) : entries.length === 0 ? (
             <div className="ui-empty-state">

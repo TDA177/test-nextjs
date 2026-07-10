@@ -14,14 +14,13 @@ function blobToDataURL(blob) {
 // ---------- Entries (text data) ----------
 
 export async function getEntries(dateKey) {
-  try {
-    const res = await fetch(`${API_URL}/api/entries?dateKey=${dateKey}`);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (e) {
-    console.error('getEntries failed:', e);
+  const res = await fetch(`${API_URL}/api/entries?dateKey=${dateKey}`);
+  if (!res.ok) {
+    const isServerError = res.status >= 500;
+    if (isServerError) throw new Error(`Server error: ${res.status}`);
     return [];
   }
+  return await res.json();
 }
 
 export async function setEntriesForDate(dateKey, entries) {
@@ -41,14 +40,12 @@ export async function setEntriesForDate(dateKey, entries) {
 }
 
 export async function listEntryDates() {
-  try {
-    const res = await fetch(`${API_URL}/api/entries/dates`);
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (e) {
-    console.error('listEntryDates failed:', e);
+  const res = await fetch(`${API_URL}/api/entries/dates`);
+  if (!res.ok) {
+    if (res.status >= 500) throw new Error(`Server error: ${res.status}`);
     return [];
   }
+  return await res.json();
 }
 
 // ---------- Media Blobs (Photos and Videos) ----------
