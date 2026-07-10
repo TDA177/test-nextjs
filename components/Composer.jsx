@@ -103,19 +103,11 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Create preview URL synchronously — must happen before any input reset
+      const url = URL.createObjectURL(file);
       setPhoto(file);
-      // Read the file into a Blob first, then create URL (iOS Safari fix)
-      const reader = new FileReader();
-      reader.onload = () => {
-        const blob = new Blob([reader.result], { type: file.type || 'image/jpeg' });
-        const url = URL.createObjectURL(blob);
-        setPhoto(blob); // Use the blob instead of File for iOS compat
-        setPhotoUrl(url);
-      };
-      reader.readAsArrayBuffer(file);
+      setPhotoUrl(url);
     }
-    // Reset input value so same file can be re-selected
-    e.target.value = '';
   };
 
   const handleRemovePhoto = () => {

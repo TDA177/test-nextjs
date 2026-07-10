@@ -41,29 +41,45 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
     }
   }, [facingMode]);
 
+  const cameraStartIdRef = useRef(0);
+
   const startCamera = async () => {
     stopCamera();
+
+    // Unique ID to detect if another startCamera call superseded this one
+    const thisId = ++cameraStartIdRef.current;
+
     // Allow the browser/hardware some time to release camera device
     await new Promise((resolve) => setTimeout(resolve, 300));
-    
+
+    // Abort if a newer startCamera call was made while we waited
+    if (thisId !== cameraStartIdRef.current) return;
+
     // Try exact facingMode first (required for back camera on many iOS devices),
-    // fall back to ideal if exact is not supported
+    // fall back to ideal, then any camera
     const constraints = [
       { video: { facingMode: { exact: facingMode } }, audio: true },
       { video: { facingMode: facingMode }, audio: true },
       { video: true, audio: true },
     ];
-    
+
     for (const constraint of constraints) {
+      // Abort if superseded
+      if (thisId !== cameraStartIdRef.current) return;
       try {
         const stream = await navigator.mediaDevices.getUserMedia(constraint);
+        // Abort if superseded while awaiting getUserMedia
+        if (thisId !== cameraStartIdRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         videoStreamRef.current = stream;
         if (videoElemRef.current) {
           videoElemRef.current.srcObject = stream;
         }
-        return; // success, stop trying
+        return; // success
       } catch (err) {
-        console.warn('Camera constraint failed, trying next:', constraint, err);
+        console.warn('Camera constraint failed, trying next:', err.message);
       }
     }
     console.error('All camera constraints failed');
@@ -88,34 +104,51 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   };
 
   const startRecording = () => {
-    if (!videoStreamRef.current) return;
+    if (!videoStreamRef.current) {
+      alert('Camera chưa sẵn sàng. Vui lòng thử lại.');
+      return;
+    }
     chunksRef.current = [];
-    
-    // Select mime type support
-    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm;codecs=vp8,opus' };
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: 'video/webm' };
+
+    // Detect supported mime type — iOS Safari only supports mp4, desktop supports webm
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',           // iOS Safari 14.3+
+      'video/mp4;codecs=avc1', // iOS Safari fallback
+    ];
+
+    let selectedMime = '';
+    for (const mime of mimeTypes) {
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mime)) {
+        selectedMime = mime;
+        break;
       }
     }
 
+    if (!selectedMime) {
+      alert('Trình duyệt này không hỗ trợ quay video. Hãy dùng nút 📁 để chọn video từ thư viện.');
+      return;
+    }
+
     try {
-      const recorder = new MediaRecorder(videoStreamRef.current, options);
+      const recorder = new MediaRecorder(videoStreamRef.current, { mimeType: selectedMime });
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
-      
+
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const blobType = selectedMime.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
+        const blob = new Blob(chunksRef.current, { type: blobType });
         setRawFile(blob);
         stopCamera();
         setScreen('editor');
       };
 
-      recorder.start(10); // gather data slices
+      recorder.start(100); // gather data slices every 100ms
       mediaRecorderRef.current = recorder;
       setRecording(true);
       setRecordSecs(0);
@@ -131,7 +164,7 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
       }, 1000);
     } catch (err) {
       console.error('MediaRecorder start failed:', err);
-      alert('Không khởi động ghi hình được.');
+      alert('Không khởi động ghi hình được. Hãy dùng nút 📁 để chọn video.');
     }
   };
 

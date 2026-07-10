@@ -1,170 +1,107 @@
 // utils/db.js
-const DB_NAME = 'NhatKyBeXinhDB';
-const DB_VERSION = 1;
 
-let dbPromise = null;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-function getDB() {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      
-      request.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('entries')) {
-          db.createObjectStore('entries');
-        }
-        if (!db.objectStoreNames.contains('media')) {
-          db.createObjectStore('media');
-        }
-      };
-      
-      request.onsuccess = (e) => {
-        resolve(e.target.result);
-      };
-      
-      request.onerror = (e) => {
-        reject(e.target.error);
-      };
-    });
-  }
-  return dbPromise;
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ---------- Entries (text data) ----------
 
 export async function getEntries(dateKey) {
-  const db = await getDB();
-  if (!db) return [];
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('entries', 'readonly');
-    const store = tx.objectStore('entries');
-    const request = store.get(dateKey);
-    
-    request.onsuccess = () => {
-      resolve(request.result || []);
-    };
-    
-    request.onerror = () => {
-      resolve([]);
-    };
-  });
+  try {
+    const res = await fetch(`${API_URL}/api/entries?dateKey=${dateKey}`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    console.error('getEntries failed:', e);
+    return [];
+  }
 }
 
 export async function setEntriesForDate(dateKey, entries) {
-  const db = await getDB();
-  if (!db) return false;
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('entries', 'readwrite');
-    const store = tx.objectStore('entries');
-    
-    let request;
-    if (!entries || entries.length === 0) {
-      request = store.delete(dateKey);
-    } else {
-      request = store.put(entries, dateKey);
-    }
-    
-    request.onsuccess = () => {
-      resolve(true);
-    };
-    
-    request.onerror = () => {
-      resolve(false);
-    };
-  });
+  try {
+    const res = await fetch(`${API_URL}/api/entries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ dateKey, entries }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('setEntriesForDate failed:', e);
+    return false;
+  }
 }
 
 export async function listEntryDates() {
-  const db = await getDB();
-  if (!db) return [];
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('entries', 'readonly');
-    const store = tx.objectStore('entries');
-    const request = store.getAllKeys();
-    
-    request.onsuccess = () => {
-      const keys = request.result || [];
-      // Sort in reverse order to show newest dates first
-      resolve(keys.sort().reverse());
-    };
-    
-    request.onerror = () => {
-      resolve([]);
-    };
-  });
+  try {
+    const res = await fetch(`${API_URL}/api/entries/dates`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    console.error('listEntryDates failed:', e);
+    return [];
+  }
 }
 
 // ---------- Media Blobs (Photos and Videos) ----------
 
 export async function saveMediaBlob(mediaId, blob) {
-  const db = await getDB();
-  if (!db) return null;
-  
-  // Convert File objects to raw Blobs to prevent DataCloneError on iOS Safari
-  let safeBlob = blob;
-  if (blob instanceof File) {
-    safeBlob = new Blob([blob], { type: blob.type });
+  try {
+    // Convert File/Blob to raw DataURL (base64)
+    let safeBlob = blob;
+    if (blob instanceof File) {
+      safeBlob = new Blob([blob], { type: blob.type });
+    }
+    
+    const dataUrl = await blobToDataURL(safeBlob);
+    
+    const res = await fetch(`${API_URL}/api/media`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mediaId, dataUrl }),
+    });
+    
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.mediaId;
+  } catch (e) {
+    console.error('saveMediaBlob failed:', e);
+    return null;
   }
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('media', 'readwrite');
-    const store = tx.objectStore('media');
-    const request = store.put(safeBlob, mediaId);
-    
-    request.onsuccess = () => {
-      resolve(mediaId);
-    };
-    
-    request.onerror = (e) => {
-      console.error('saveMediaBlob failed:', e);
-      resolve(null);
-    };
-  });
 }
 
 export async function getMediaBlob(mediaId) {
-  const db = await getDB();
-  if (!db) return null;
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('media', 'readonly');
-    const store = tx.objectStore('media');
-    const request = store.get(mediaId);
-    
-    request.onsuccess = () => {
-      resolve(request.result || null);
-    };
-    
-    request.onerror = () => {
-      resolve(null);
-    };
-  });
+  try {
+    const res = await fetch(`${API_URL}/api/media?mediaId=${mediaId}`);
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch (e) {
+    console.error('getMediaBlob failed:', e);
+    return null;
+  }
 }
 
 export async function deleteMediaBlob(mediaId) {
-  if (!mediaId) return;
-  const db = await getDB();
-  if (!db) return;
-  
-  return new Promise((resolve) => {
-    const tx = db.transaction('media', 'readwrite');
-    const store = tx.objectStore('media');
-    const request = store.delete(mediaId);
-    
-    request.onsuccess = () => {
-      resolve(true);
-    };
-    
-    request.onerror = () => {
-      resolve(false);
-    };
-  });
+  if (!mediaId) return false;
+  try {
+    const res = await fetch(`${API_URL}/api/media?mediaId=${mediaId}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('deleteMediaBlob failed:', e);
+    return false;
+  }
 }
 
 // Helper to create object URL from Media ID
