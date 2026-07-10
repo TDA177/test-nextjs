@@ -11,10 +11,11 @@ export async function normalizeImageToJpeg(input) {
   if (typeof createImageBitmap === 'function') {
     try {
       const bitmap = await createImageBitmap(input);
+      const { width, height } = getScaledDimensions(bitmap.width, bitmap.height, 1920);
       const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
       bitmap.close?.();
       const blob = await canvasToJpeg(canvas);
       if (blob) return blob;
@@ -33,9 +34,16 @@ export async function normalizeImageToJpeg(input) {
   }
 }
 
+function getScaledDimensions(width, height, maxSize) {
+  if (width <= maxSize && height <= maxSize) return { width, height };
+  const ratio = width / height;
+  if (width > height) return { width: maxSize, height: Math.round(maxSize / ratio) };
+  return { width: Math.round(maxSize * ratio), height: maxSize };
+}
+
 function canvasToJpeg(canvas) {
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.92);
+    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.85); // slightly lower quality for size
   });
 }
 
@@ -43,10 +51,11 @@ function loadUrlAsJpeg(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = async () => {
+      const { width, height } = getScaledDimensions(img.naturalWidth, img.naturalHeight, 1920);
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
       const blob = await canvasToJpeg(canvas);
       blob ? resolve(blob) : reject(new Error('canvas toBlob failed'));
     };
