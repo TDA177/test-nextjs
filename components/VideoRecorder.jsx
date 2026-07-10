@@ -123,12 +123,13 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
     chunksRef.current = [];
 
     // Detect supported mime type — iOS Safari only supports mp4, desktop supports webm
+    // Prioritize mp4 because iOS Safari claims to support webm but fails to play it back
     const mimeTypes = [
+      'video/mp4;codecs=avc1', // iOS Safari fallback
+      'video/mp4',           // iOS Safari 14.3+
       'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
       'video/webm',
-      'video/mp4',           // iOS Safari 14.3+
-      'video/mp4;codecs=avc1', // iOS Safari fallback
     ];
 
     let selectedMime = '';
