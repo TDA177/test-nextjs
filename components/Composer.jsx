@@ -1,28 +1,24 @@
 // components/Composer.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  Clock, Heart, PenLine, Camera, Image, Clapperboard, Music, Video,
+} from 'lucide-react';
 import { MOODS } from '../constants/moods';
 import { pad, parseTime } from '../utils/helpers';
 import { saveMediaBlob, deleteMediaBlob, getMediaUrl } from '../utils/db';
+import { normalizeImageToJpeg } from '../utils/imageUtils';
+import { canUseInAppCamera } from '../utils/cameraSupport';
 import MusicPicker from './MusicPicker';
 import TrackChip from './TrackChip';
 import VideoPlayer from './VideoPlayer';
 import VideoRecorder from './VideoRecorder';
-
-function Label({ icon, text }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', marginBottom: '8px' }}>
-      <span style={{ fontSize: '12px' }}>{icon}</span>
-      <span 
-        style={{
-          fontSize: '11px', fontWeight: '700', color: '#64748B',
-          textTransform: 'uppercase', letterSpacing: '1.2px'
-        }}
-      >
-        {text}
-      </span>
-    </div>
-  );
-}
+import PhotoCapture from './PhotoCapture';
+import SectionLabel from './ui/SectionLabel';
+import IconButton from './ui/IconButton';
+import ActionCard from './ui/ActionCard';
+import MediaTile from './ui/MediaTile';
+import MoodChip from './ui/MoodChip';
+import { X } from 'lucide-react';
 
 export default function Composer({ visible, existing, onClose, onSave }) {
   const now = new Date();
@@ -36,39 +32,79 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   // media file states (can be string ID or File object)
   const [photo, setPhoto] = useState(null);
   const [photoUrl, setPhotoUrl] = useState(null);
-  const [video, setVideo] = useState(null); // { fileOrUri, timestamp, caption }
+  const [video, setVideo] = useState(null); // { file, timestamp, caption } or { uri, ... }
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
   const [track, setTrack] = useState(null);
 
   const [musicPickerOpen, setMusicPickerOpen] = useState(false);
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false);
   
   const photoInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  const nativeCaptureRef = useRef(null);
   const prevPhotoUrlRef = useRef(null);
+  const prevVideoUrlRef = useRef(null);
+  const modalWasOpenRef = useRef(false);
+  const nativePickerActiveRef = useRef(false);
+  const suppressBackdropCloseUntilRef = useRef(0);
 
-  // Reset fields when modal is opened
+  // iOS fires ghost clicks on backdrop after returning from native camera
   useEffect(() => {
-    if (visible) {
-      const initialTime = existing?.time || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
-      setTime(initialTime);
-      setTimePicked(existing?.timePicked || false);
-      setMoodId(existing?.mood || 'yeu');
-      setNote(existing?.note || '');
-      setTrack(existing?.track || null);
-      
-      if (existing?.photo) {
-        setPhoto(existing.photo);
-        resolvePhotoUrl(existing.photo);
-      } else {
-        setPhoto(null);
-        setPhotoUrl(null);
-      }
+    const onReturn = () => {
+      suppressBackdropCloseUntilRef.current = Date.now() + 2000;
+      // Reset picker lock after a delay (onChange may arrive late)
+      setTimeout(() => {
+        nativePickerActiveRef.current = false;
+      }, 3000);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onReturn();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, []);
 
-      if (existing?.video) {
-        setVideo(existing.video);
-      } else {
-        setVideo(null);
-      }
+  const handleBackdropClose = () => {
+    if (Date.now() < suppressBackdropCloseUntilRef.current) return;
+    if (nativePickerActiveRef.current) return;
+    if (photoCaptureOpen || videoRecorderOpen || musicPickerOpen) return;
+    onClose();
+  };
+
+  // Initialize fields only when modal opens (not on every re-render)
+  useEffect(() => {
+    if (!visible) {
+      modalWasOpenRef.current = false;
+      return;
+    }
+    if (modalWasOpenRef.current) return;
+    modalWasOpenRef.current = true;
+
+    const initialTime = existing?.time || `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
+    setTime(initialTime);
+    setTimePicked(existing?.timePicked || false);
+    setMoodId(existing?.mood || 'yeu');
+    setNote(existing?.note || '');
+    setTrack(existing?.track || null);
+
+    if (existing?.photo) {
+      setPhoto(existing.photo);
+      resolvePhotoUrl(existing.photo);
+    } else {
+      setPhoto(null);
+      setPhotoUrl(null);
+    }
+
+    if (existing?.video) {
+      setVideo(existing.video);
+      resolveVideoUrl(existing.video);
+    } else {
+      setVideo(null);
+      setVideoPreviewUrl(null);
     }
   }, [visible, existing]);
 
@@ -81,11 +117,23 @@ export default function Composer({ visible, existing, onClose, onSave }) {
     prevPhotoUrlRef.current = photoUrl;
   }, [photoUrl]);
 
+  // Revoke previous video blob URL when videoPreviewUrl changes
+  useEffect(() => {
+    const prev = prevVideoUrlRef.current;
+    if (prev && prev !== videoPreviewUrl && prev.startsWith('blob:')) {
+      URL.revokeObjectURL(prev);
+    }
+    prevVideoUrlRef.current = videoPreviewUrl;
+  }, [videoPreviewUrl]);
+
   // Cleanup on unmount only
   useEffect(() => {
     return () => {
       if (prevPhotoUrlRef.current && prevPhotoUrlRef.current.startsWith('blob:')) {
         URL.revokeObjectURL(prevPhotoUrlRef.current);
+      }
+      if (prevVideoUrlRef.current && prevVideoUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(prevVideoUrlRef.current);
       }
     };
   }, []);
@@ -100,13 +148,78 @@ export default function Composer({ visible, existing, onClose, onSave }) {
     }
   };
 
-  const handlePhotoUpload = (e) => {
+  const resolveVideoUrl = async (val) => {
+    const source = val?.file || val?.uri;
+    if (source instanceof File || source instanceof Blob) {
+      const url = URL.createObjectURL(source);
+      setVideoPreviewUrl(url);
+    } else if (typeof source === 'string') {
+      const url = await getMediaUrl(source);
+      setVideoPreviewUrl(url || source);
+    }
+  };
+
+  const applyVideo = (meta) => {
+    const blob = meta.file || meta.blob;
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    setVideo({
+      file: blob,
+      timestamp: meta.timestamp || '',
+      caption: meta.caption || '',
+    });
+    setVideoPreviewUrl(url);
+  };
+
+  const applyPhoto = (blob) => {
+    const url = URL.createObjectURL(blob);
+    setPhoto(blob);
+    setPhotoUrl(url);
+  };
+
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Create preview URL synchronously — must happen before any input reset
-      const url = URL.createObjectURL(file);
-      setPhoto(file);
-      setPhotoUrl(url);
+    e.target.value = '';
+    nativePickerActiveRef.current = false;
+    suppressBackdropCloseUntilRef.current = Date.now() + 1500;
+    if (!file || file.size === 0) return;
+
+    try {
+      const blob = await normalizeImageToJpeg(file);
+      applyPhoto(blob);
+    } catch (err) {
+      console.error('Failed to process photo:', err);
+      alert('Không đọc được ảnh. Hãy thử chụp lại hoặc chọn ảnh khác.');
+    }
+  };
+
+  const handlePhotoCaptured = (blob) => {
+    applyPhoto(blob);
+  };
+
+  const handleOpenCamera = () => {
+    if (canUseInAppCamera()) {
+      setPhotoCaptureOpen(true);
+    } else {
+      nativePickerActiveRef.current = true;
+      suppressBackdropCloseUntilRef.current = Date.now() + 5000;
+      nativeCaptureRef.current?.click();
+    }
+  };
+
+  const handleOpenGallery = () => {
+    nativePickerActiveRef.current = true;
+    suppressBackdropCloseUntilRef.current = Date.now() + 5000;
+    photoInputRef.current?.click();
+  };
+
+  const handleFallbackPhotoFile = async (file) => {
+    try {
+      const blob = await normalizeImageToJpeg(file);
+      applyPhoto(blob);
+    } catch (err) {
+      console.error('Failed to process photo:', err);
+      alert('Không đọc được ảnh. Hãy thử chọn ảnh khác.');
     }
   };
 
@@ -118,6 +231,7 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   const handleRemoveVideo = () => {
     if (window.confirm('Xoá video? Video này sẽ bị xoá khỏi ghi chú.')) {
       setVideo(null);
+      setVideoPreviewUrl(null);
     }
   };
 
@@ -180,7 +294,8 @@ export default function Composer({ visible, existing, onClose, onSave }) {
   const canSave = note.trim().length > 0;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <>
+    <div className="modal-backdrop" onClick={handleBackdropClose}>
       <div 
         className="modal-sheet" 
         style={{ display: 'flex', flexDirection: 'column' }} 
@@ -189,53 +304,41 @@ export default function Composer({ visible, existing, onClose, onSave }) {
         <div className="modal-handle" />
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b' }}>
+        <div className="ui-modal-header">
+          <span className="ui-modal-title">
             {existing ? 'Sửa ghi chú' : 'Ghi chú mới'}
           </span>
-          <button 
-            onClick={onClose}
-            style={{
-              width: '36px', height: '36px', borderRadius: '50%', border: 'none',
-              background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '16px', color: '#64748b'
-            }}
-          >
-            ✕
-          </button>
+          <IconButton icon={X} label="Đóng" onClick={onClose} />
         </div>
 
         {/* Scrollable Container */}
         <div className="modal-scrollable" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           
           {/* Time Picker */}
-          <Label icon="🕒" text="Lúc mấy giờ (tuỳ chọn)" />
+          <SectionLabel icon={Clock} text="Lúc mấy giờ (tuỳ chọn)" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="time"
+              className="ui-input ui-input--mono"
+              style={{ flex: 1 }}
               value={time}
               onChange={(e) => {
                 setTime(e.target.value);
                 setTimePicked(true);
               }}
-              style={{
-                flex: 1, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0',
-                borderRadius: '16px', padding: '12px 16px', fontSize: '16px', color: '#1e293b',
-                outline: 'none', fontFamily: 'monospace'
-              }}
             />
             {timePicked && (
-              <button
+              <IconButton
+                icon={X}
+                label="Xóa giờ"
+                size="sm"
                 onClick={() => { setTime(defaultTime); setTimePicked(false); }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#cbd5e1', fontSize: '20px' }}
-              >
-                ✕
-              </button>
+              />
             )}
           </div>
 
           {/* Mood Selection */}
-          <Label icon="❤️" text="Tâm trạng" />
+          <SectionLabel icon={Heart} text="Tâm trạng" />
           <div 
             style={{
               display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px',
@@ -243,90 +346,56 @@ export default function Composer({ visible, existing, onClose, onSave }) {
               flexShrink: 0, minHeight: '44px'
             }}
           >
-            {MOODS.map((m) => {
-              const active = m.id === moodId;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => setMoodId(m.id)}
-                  style={{
-                    padding: '8px 14px', borderRadius: '999px', border: active ? `2px solid ${m.dot}` : '2px solid transparent',
-                    backgroundColor: m.bg, color: m.fg, fontWeight: '700', fontSize: '13px', cursor: 'pointer',
-                    whiteSpace: 'nowrap', transition: 'all 0.15s ease', outline: 'none'
-                  }}
-                >
-                  {m.emoji}  {m.label}
-                </button>
-              );
-            })}
+            {MOODS.map((m) => (
+              <MoodChip
+                key={m.id}
+                mood={m}
+                active={m.id === moodId}
+                onClick={() => setMoodId(m.id)}
+              />
+            ))}
           </div>
 
           {/* Text Note Area */}
-          <Label icon="✍️" text="Ghi gì hôm nay" />
+          <SectionLabel icon={PenLine} text="Ghi gì hôm nay" />
           <textarea
+            className="ui-input"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Hôm nay mình..."
             autoFocus
-            style={{
-              width: '100%', minHeight: '100px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0',
-              borderRadius: '16px', padding: '14px 16px', fontSize: '16px', color: '#1e293b',
-              outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: '1.5'
-            }}
+            style={{ minHeight: '100px', resize: 'vertical', lineHeight: '1.5' }}
           />
 
           {/* Photo Selection */}
-          <Label icon="📸" text="Ảnh (tuỳ chọn)" />
+          <SectionLabel icon={Camera} text="Ảnh (tuỳ chọn)" />
           {photoUrl ? (
-            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
-              <img src={photoUrl} alt="" style={{ width: '100%', height: '220px', objectFit: 'cover' }} />
-              <button
-                onClick={handleRemovePhoto}
-                style={{
-                  position: 'absolute', top: '8px', right: '8px', width: '30px', height: '30px', borderRadius: '50%',
-                  backgroundColor: 'rgba(0,0,0,0.6)', border: 'none', color: 'white', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: '14px', cursor: 'pointer'
+            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0', background: '#f1f5f9', minHeight: '220px' }}>
+              <img
+                src={photoUrl}
+                alt="Ảnh đã chọn"
+                style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }}
+                onError={() => {
+                  console.error('Preview failed for:', photoUrl);
+                  setPhotoUrl(null);
+                  setPhoto(null);
                 }}
-              >
-                ✕
-              </button>
+              />
+              <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                <IconButton
+                  icon={X}
+                  label="Xóa ảnh"
+                  variant="overlay"
+                  size="sm"
+                  onClick={handleRemovePhoto}
+                />
+              </div>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                style={{
-                  flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #FED7AA',
-                  backgroundColor: '#FFF7ED', color: '#EA580C', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '12px', fontWeight: '700', gap: '4px'
-                }}
-              >
-                <span style={{ fontSize: '24px' }}>📷</span>
-                Chụp ảnh
-              </button>
-              <button
-                onClick={() => photoInputRef.current?.click()}
-                style={{
-                  flex: 1, height: '80px', borderRadius: '16px', border: '2px dashed #BFDBFE',
-                  backgroundColor: '#EFF6FF', color: '#3B82F6', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '12px', fontWeight: '700', gap: '4px'
-                }}
-              >
-                <span style={{ fontSize: '24px' }}>🖼️</span>
-                Thư viện
-              </button>
-              {/* Camera capture input (opens camera directly on iOS) */}
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handlePhotoUpload}
-                style={{ display: 'none' }}
-              />
-              {/* Gallery picker input (no capture attr = opens file picker) */}
+              <MediaTile icon={Camera} label="Chụp ảnh" accent="orange" onClick={handleOpenCamera} />
+              <MediaTile icon={Image} label="Thư viện" accent="blue" onClick={handleOpenGallery} />
+              {/* Gallery picker input */}
               <input
                 ref={photoInputRef}
                 type="file"
@@ -334,80 +403,67 @@ export default function Composer({ visible, existing, onClose, onSave }) {
                 onChange={handlePhotoUpload}
                 style={{ display: 'none' }}
               />
+              {/* Native camera fallback for HTTP / no webcam */}
+              <input
+                ref={nativeCaptureRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoUpload}
+                style={{ display: 'none' }}
+              />
             </div>
           )}
 
           {/* Video Selection */}
-          <Label icon="🎬" text="Video (tuỳ chọn)" />
-          {video ? (
-            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
+          <SectionLabel icon={Clapperboard} text="Video (tuỳ chọn)" />
+          {video && videoPreviewUrl ? (
+            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0', minHeight: '200px' }}>
               <VideoPlayer
-                uri={video.file || video.uri}
+                uri={videoPreviewUrl}
                 timestamp={video.timestamp}
                 caption={video.caption}
                 track={track}
                 onRemove={handleRemoveVideo}
               />
             </div>
+          ) : video ? (
+            <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', borderRadius: '16px', border: '1px solid #E2E8F0' }}>
+              <div className="ui-spinner" />
+            </div>
           ) : (
-            <button
+            <ActionCard
+              icon={Video}
+              title="Quay video"
+              subtitle="Có timestamp + caption"
+              accent="pink"
               onClick={() => setVideoRecorderOpen(true)}
-              style={{
-                width: '100%', borderRadius: '16px', border: '1px solid #FBCFE8', background: 'linear-gradient(135deg, #FFF1F4 0%, #FFF7F0 100%)',
-                padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px'
-              }}
-            >
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#FFE3F1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                🎥
-              </div>
-              <div style={{ flex: 1, textAlign: 'left' }}>
-                <p style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>Quay video</p>
-                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>Có timestamp + caption</p>
-              </div>
-              <span style={{ color: '#FBCFE8', fontSize: '16px' }}>➔</span>
-            </button>
+            />
           )}
 
           {/* Music Selection */}
-          <Label icon="🎵" text="Nhạc đang nghe (tuỳ chọn)" />
+          <SectionLabel icon={Music} text="Nhạc đang nghe (tuỳ chọn)" />
           {track ? (
             <TrackChip track={track} onRemove={() => setTrack(null)} />
           ) : (
-            <button
+            <ActionCard
+              icon={Music}
+              title="Tìm và thêm bài hát"
+              accent="purple"
               onClick={() => setMusicPickerOpen(true)}
-              style={{
-                width: '100%', borderRadius: '16px', border: '1px solid #DDD6FE', background: 'linear-gradient(135deg, #EDE9FE 0%, #F5F3FF 100%)',
-                padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px'
-              }}
-            >
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                🎧
-              </div>
-              <span style={{ fontSize: '15px', fontWeight: '700', color: '#7c3aed' }}>Tìm và thêm bài hát</span>
-            </button>
+            />
           )}
 
           {/* Save / Cancel Action Row */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-            <button
-              onClick={onClose}
-              style={{
-                flex: 1, padding: '14px 0', borderRadius: '16px', border: 'none',
-                backgroundColor: '#F1F5F9', color: '#475569', fontWeight: '700', fontSize: '15px',
-                cursor: 'pointer'
-              }}
-            >
+          <div className="ui-btn-row">
+            <button type="button" className="ui-btn-secondary" onClick={onClose}>
               Huỷ
             </button>
             <button
+              type="button"
+              className="ui-btn-primary"
               onClick={handleSave}
               disabled={!canSave}
-              style={{
-                flex: 2, padding: '14px 0', borderRadius: '16px', border: 'none',
-                background: 'var(--primary-gradient)', color: 'white', fontWeight: '800', fontSize: '15px',
-                cursor: canSave ? 'pointer' : 'not-allowed', opacity: canSave ? 1 : 0.5,
-                boxShadow: canSave ? '0 4px 12px rgba(255, 143, 177, 0.3)' : 'none'
-              }}
             >
               {existing ? 'Cập nhật' : 'Lưu vào sổ'}
             </button>
@@ -415,20 +471,30 @@ export default function Composer({ visible, existing, onClose, onSave }) {
 
         </div>
       </div>
+    </div>
 
-      {/* Music Picker Modal */}
+      {/* Overlays rendered outside backdrop to avoid iOS ghost-click closing modal */}
       <MusicPicker
         visible={musicPickerOpen}
         onClose={() => setMusicPickerOpen(false)}
         onSelect={(t) => setTrack(t)}
       />
 
-      {/* Video Recorder / Upload Modal */}
       <VideoRecorder
         visible={videoRecorderOpen}
         onClose={() => setVideoRecorderOpen(false)}
-        onVideoSaved={(meta) => setVideo(meta)} // meta = { file (Blob), timestamp, caption }
+        onVideoSaved={(meta) => {
+          suppressBackdropCloseUntilRef.current = Date.now() + 3000;
+          applyVideo(meta);
+        }}
       />
-    </div>
+
+      <PhotoCapture
+        visible={photoCaptureOpen}
+        onClose={() => setPhotoCaptureOpen(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        onFallbackToGallery={handleFallbackPhotoFile}
+      />
+    </>
   );
 }

@@ -1,6 +1,11 @@
 // components/VideoRecorder.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import VideoEditor from './VideoEditor';
+import { useCameraStream } from '../utils/useCameraStream';
+import { getCameraErrorMessage } from '../utils/cameraSupport';
+import { getSupportedRecorderMimeType } from '../utils/videoUtils';
+import IconButton from './ui/IconButton';
+import { X, RefreshCw, FolderOpen } from 'lucide-react';
 
 export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const [screen, setScreen] = useState('idle'); // 'idle' | 'camera' | 'editor'
@@ -9,12 +14,18 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   const [recordSecs, setRecordSecs] = useState(0);
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   
-  const videoStreamRef = useRef(null);
   const videoElemRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const { streamRef, stopCamera, retryCamera, error, ready } = useCameraStream({
+    active: visible && screen === 'camera',
+    facingMode,
+    videoRef: videoElemRef,
+    includeAudio: true,
+  });
 
   useEffect(() => {
     if (visible) {
@@ -22,7 +33,6 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
       setRawFile(null);
       setRecording(false);
       setRecordSecs(0);
-      startCamera();
     } else {
       stopCamera();
       clearInterval(timerRef.current);
@@ -32,6 +42,7 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
       stopCamera();
       clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   // Restart camera when facingMode changes
@@ -143,6 +154,13 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
       recorder.onstop = () => {
         const blobType = selectedMime.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
         const blob = new Blob(chunksRef.current, { type: blobType });
+        if (blob.size === 0) {
+          alert('Không ghi được video. Hãy thử lại hoặc chọn từ thư viện.');
+          setScreen('camera');
+          // If retryCamera was a function we had, we would call it. But we just use startCamera
+          startCamera();
+          return;
+        }
         setRawFile(blob);
         stopCamera();
         setScreen('editor');
@@ -186,21 +204,25 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
   };
 
   const toggleFacingMode = () => {
+    if (recording || !ready) return;
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
   const handleEditorDone = ({ blob, timestamp, caption }) => {
     onVideoSaved({ file: blob, timestamp, caption });
-    onClose();
+    // Delay close so tap on XONG doesn't fall through to backdrop (iOS)
+    setTimeout(() => onClose(), 350);
   };
 
   const handleEditorClose = () => {
     setScreen('camera');
     setRawFile(null);
-    startCamera();
+    retryCamera();
   };
 
   if (!visible) return null;
+
+  const cameraErrorMsg = error ? getCameraErrorMessage(error) : null;
 
   return (
     <>
@@ -215,36 +237,25 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
         >
           {/* Top Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '50px 24px 8px 24px', zIndex: 10 }}>
-            <button
-              onClick={onClose}
-              style={{
-                width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}
-            >
-              ✕
-            </button>
+            <IconButton icon={X} label="Đóng" variant="dark" size="lg" onClick={onClose} />
             
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button
+              <IconButton
+                icon={RefreshCw}
+                label="Đổi camera"
+                variant="dark"
+                size="lg"
+                disabled={recording || !ready}
                 onClick={toggleFacingMode}
-                style={{
-                  width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                  background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                🔄
-              </button>
+              />
               
-              <button
+              <IconButton
+                icon={FolderOpen}
+                label="Chọn video"
+                variant="dark"
+                size="lg"
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  width: '44px', height: '44px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)',
-                  background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                📁
-              </button>
+              />
             </div>
             
             <input
@@ -257,14 +268,50 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
           </div>
 
           {/* Camera Feed */}
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 1, overflow: 'hidden' }}>
             <video
               ref={videoElemRef}
               autoPlay
               playsInline
               muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover',
+                transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+              }}
             />
+            {(!ready || cameraErrorMsg) && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 5,
+                }}
+              >
+                {cameraErrorMsg ? (
+                  <div style={{ textAlign: 'center', padding: '0 32px' }}>
+                    <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5, marginBottom: '16px' }}>
+                      {cameraErrorMsg}
+                    </p>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        padding: '12px 24px', borderRadius: '12px', border: 'none',
+                        background: '#FF8FB1', color: 'white', fontWeight: '700', fontSize: '14px', cursor: 'pointer',
+                      }}
+                    >
+                      Chọn video từ thư viện
+                    </button>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+                    Đang mở camera...
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Record Label overlay */}
@@ -281,10 +328,11 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
           <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: '44px', gap: '20px' }}>
             <button
               onClick={handleToggleRecord}
+              disabled={!ready}
               style={{
                 width: '88px', height: '88px', borderRadius: '50%', border: 'none',
-                background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', outline: 'none'
+                background: 'transparent', cursor: ready ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', outline: 'none', opacity: ready ? 1 : 0.35
               }}
             >
               {/* Outer pulsing ring */}
