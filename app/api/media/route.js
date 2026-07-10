@@ -18,12 +18,14 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Media not found' }, { status: 404 });
     }
 
-    const match = doc.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    // Match data:[<mediatype>][;base64],<data>
+    // mediatype can contain semicolons like video/webm;codecs=vp8
+    const match = doc.dataUrl.match(/^data:(.*?);base64,(.+)$/);
     if (!match) {
       return NextResponse.json({ dataUrl: doc.dataUrl });
     }
 
-    const contentType = match[1];
+    const contentType = match[1] || 'application/octet-stream';
     const base64Data = match[2];
     const buffer = Buffer.from(base64Data, 'base64');
 
