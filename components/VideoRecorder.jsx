@@ -42,12 +42,12 @@ export default function VideoRecorder({ visible, onClose, onVideoSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  // Restart camera when facingMode changes
+  // Restart camera when facingMode or screen changes
   useEffect(() => {
     if (screen === 'camera' && visible) {
       startCamera();
     }
-  }, [facingMode]);
+  }, [facingMode, screen, visible]);
 
   const cameraStartIdRef = useRef(0);
 
