@@ -240,7 +240,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
             userSelect: 'none',
           }}
         >
-          {/* Background image container */}
+          {/* Blurred Background */}
           <div
             style={{
               position: 'absolute',
@@ -248,9 +248,36 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
               backgroundImage: `url(${imageUrl})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
+              filter: 'blur(20px) brightness(0.55)',
+              transform: 'scale(1.1)',
               zIndex: 1,
             }}
           />
+
+          {/* Foreground Image Container */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2,
+              padding: '40px 0',
+            }}
+          >
+            <img
+              src={imageUrl}
+              alt=""
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                borderRadius: '8px',
+              }}
+            />
+          </div>
 
           {/* Vignette bottom */}
           <div
@@ -261,7 +288,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
               right: 0,
               height: '220px',
               background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)',
-              zIndex: 2,
+              zIndex: 3,
               pointerEvents: 'none',
             }}
           />
@@ -275,7 +302,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
               right: 0,
               height: '100px',
               background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)',
-              zIndex: 2,
+              zIndex: 3,
               pointerEvents: 'none',
             }}
           />

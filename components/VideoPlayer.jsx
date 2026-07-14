@@ -357,10 +357,37 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
             alignItems: 'stretch', userSelect: 'none'
           }}
         >
+          {/* Blurred Background Video */}
+          <video
+            src={videoUrl}
+            muted
+            playsInline
+            autoPlay
+            loop
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'blur(20px) brightness(0.55)',
+              transform: 'scale(1.1)',
+              zIndex: 1,
+            }}
+          />
+
+          {/* Foreground Video */}
           <video
             ref={fullVideoRef}
             src={videoUrl}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 2,
+            }}
             playsInline
             autoPlay
             loop
@@ -369,9 +396,9 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           />
 
           {/* Vignette bottom */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '220px', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)', zIndex: 2, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '220px', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)', zIndex: 3, pointerEvents: 'none' }} />
           {/* Vignette top */}
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)', zIndex: 2, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)', zIndex: 3, pointerEvents: 'none' }} />
 
           {/* Overlays */}
           {(timestamp || caption) && (
