@@ -1,5 +1,6 @@
 // components/PhotoPlayer.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { getMediaUrl } from '../utils/db';
 
 function WaveBarsSmall() {
@@ -81,10 +82,15 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [mounted, setMounted] = useState(false);
   
   const audioRef = useRef(null);
   const progressTimerRef = useRef(null);
   const duration = track ? 30000 : 7000; // 30s for music, 7s for standard story
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Resolve IndexedDB photo blob URL
   useEffect(() => {
@@ -226,13 +232,13 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
       />
 
       {/* Fullscreen Story Modal */}
-      {fullscreen && (
+      {fullscreen && mounted && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',
             inset: 0,
             background: 'black',
-            zIndex: 9999,
+            zIndex: 99999,
             userSelect: 'none',
           }}
         >
@@ -443,7 +449,8 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
             {track && <StoryMusicSticker track={track} />}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

@@ -1,5 +1,6 @@
 // components/VideoPlayer.jsx
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Music, Video, Maximize2, Play, X, AlertCircle } from 'lucide-react';
 import { getMediaUrl } from '../utils/db';
 
@@ -85,10 +86,15 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
   const [progress, setProgress] = useState(0);
   const [fullProgress, setFullProgress] = useState(0);
   const [error, setError] = useState(false);
-
+  const [mounted, setMounted] = useState(false);
+ 
   const inlineVideoRef = useRef(null);
   const fullVideoRef = useRef(null);
   const audioRef = useRef(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Resolve video URL from blob URL string, Blob, or IndexedDB id
   useEffect(() => {
@@ -349,10 +355,10 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
       </div>
 
       {/* Fullscreen Video Story Modal */}
-      {fullscreen && (
+      {fullscreen && mounted && typeof document !== 'undefined' && createPortal(
         <div
           style={{
-            position: 'fixed', inset: 0, background: 'black', zIndex: 9999,
+            position: 'fixed', inset: 0, background: 'black', zIndex: 99999,
             userSelect: 'none'
           }}
         >
@@ -461,7 +467,8 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
             {track && <StoryMusicSticker track={track} />}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
