@@ -219,8 +219,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
           position: 'relative',
           cursor: 'pointer',
           backgroundImage: `url(${imageUrl})`,
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'cover',
           backgroundPosition: 'center',
           boxShadow: 'var(--shadow-sm)',
         }}

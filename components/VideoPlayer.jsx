@@ -260,7 +260,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
         <video
           ref={inlineVideoRef}
           src={videoUrl}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           playsInline
           onTimeUpdate={handleInlineTimeUpdate}
           onEnded={() => setIsPlaying(false)}
