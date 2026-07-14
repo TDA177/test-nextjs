@@ -233,10 +233,6 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
             inset: 0,
             background: 'black',
             zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            alignItems: 'stretch',
             userSelect: 'none',
           }}
         >
@@ -394,7 +390,10 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
           {/* Top Story Controls */}
           <div
             style={{
-              position: 'relative',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
               zIndex: 5,
               padding: '16px 16px 8px 16px',
               display: 'flex',
@@ -441,7 +440,7 @@ export default function PhotoPlayer({ uri, timestamp, caption, track }) {
           </div>
 
           {/* Bottom Music Sticker */}
-          <div style={{ position: 'relative', zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
             {track && <StoryMusicSticker track={track} />}
           </div>
         </div>

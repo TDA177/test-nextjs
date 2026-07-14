@@ -353,8 +353,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
         <div
           style={{
             position: 'fixed', inset: 0, background: 'black', zIndex: 9999,
-            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-            alignItems: 'stretch', userSelect: 'none'
+            userSelect: 'none'
           }}
         >
           {/* Blurred Background Video */}
@@ -429,7 +428,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           </div>
 
           {/* Top Controls */}
-          <div style={{ position: 'relative', zIndex: 5, padding: '16px 16px 8px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5, padding: '16px 16px 8px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ height: '3px', background: 'rgba(255,255,255,0.3)', borderRadius: '1.5px', overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${fullProgress}%`, background: 'white', transition: 'width 0.1s linear' }} />
             </div>
@@ -459,7 +458,7 @@ export default function VideoPlayer({ uri, timestamp, caption, style, onRemove, 
           </div>
 
           {/* Bottom Music Sticker */}
-          <div style={{ position: 'relative', zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, paddingBottom: '24px', display: 'flex', justifyContent: 'center' }}>
             {track && <StoryMusicSticker track={track} />}
           </div>
         </div>
